@@ -1,4 +1,8 @@
 (async () => {
+  // Injected again by the panel into tabs opened before the extension
+  // (re)loaded. Skip if a live copy of this script is already running here.
+  if (globalThis.__chessStudioAlive?.()) return;
+  globalThis.__chessStudioAlive = () => Boolean(chrome.runtime?.id);
   const { automaticArrows, supported, placement, lichessPlacement, reconstruct } = await import(
     chrome.runtime.getURL("detect.mjs")
   );

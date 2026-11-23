@@ -91,7 +91,7 @@ try {
  assert.equal(await engineArrow.count(),0);
  await popup.locator('button.board-player[data-color=w]').click();
  await popup.getByRole('button',{name:'All moves',exact:true}).click();
- await count(engineArrow,5);
+ await count(engineArrow,3);
  await rows(popup).nth(1).click();
  await assertPressed(rows(popup).nth(1),true);
  await engineArrow.nth(1).waitFor({state:'detached'});
@@ -119,7 +119,7 @@ try {
  const humanScores=await rows(popup).locator('.score').allTextContents();
  assert.deepEqual(humanScores.map(parseFloat),humanScores.map(parseFloat).sort((a,b)=>b-a));
  await popup.getByRole('button',{name:'All moves',exact:true}).click();
- await count(engineArrow,5);
+ await count(engineArrow,3);
  await mode(popup,'Engine').click();
  await assertPressed(popup.getByRole('button',{name:'Show opponent arrows',exact:true}),false);
  await setSwitch(settings,'Automatic board arrows',false);
@@ -153,7 +153,7 @@ try {
  await studio.getByRole('button',{name:'Show your arrows'}).click();
  assert.equal(await studio.locator('.board-arrows g[data-kind="move"]').count(),0);
  await studio.getByRole('button',{name:'All moves',exact:true}).click();
- await count(studio.locator('.board-arrows g[data-kind="reply"]'),5);
+ await count(studio.locator('.board-arrows g[data-kind="reply"]'),3);
  await studio.locator('button.board-player[data-color=w]').click();
  await rows(studio).nth(1).click();
  const original=await studio.locator('.board [data-square=e4]').getAttribute('aria-label');
@@ -198,15 +198,15 @@ try {
 
  await training.evaluate(()=>loadPosition('rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR',['e4','c6']));
  await turn(studio,'White to move').waitFor();
- await studio.getByRole('heading',{name:'Why c6?'}).waitFor();
+ await studio.locator('.position-board [data-square=c6][aria-label="c6 black pawn"]').waitFor();
  await training.goto('https://www.chess.com/play/computer');
  await turn(studio,'White to move').waitFor();
  await training.evaluate(()=>loadPosition('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R',['e4','e5','Nf3','Nc6']));
  await training.reload();
- await studio.getByRole('heading',{name:'Why Nc6?'}).waitFor();
+ await studio.locator('.position-board [data-square=c6][aria-label="c6 black knight"]').waitFor();
  await studio.locator('[data-square=f3][aria-label="f3 white knight"]').waitFor();
  await training.evaluate(()=>loadPosition('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR',['e4','e5']));
- await studio.getByRole('heading',{name:'Why e5?'}).waitFor();
+ await studio.locator('.position-board [data-square=e5][aria-label="e5 black pawn"]').waitFor();
  await training.goto('https://www.chess.com/puzzles');
  await studio.getByRole('heading',{name:'Looking for a game…'}).waitFor();
  assert.deepEqual(errors,[]);

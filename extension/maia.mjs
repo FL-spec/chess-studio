@@ -63,26 +63,28 @@ export async function maiaRanks(boards, ratings) {
 // Maia inference is deterministic, so finished lines are cached per position.
 const lineCache = new Map();
 const copyLines = rows => rows.map(row => ({ ...row, line: [...row.line] }));
-export async function maiaLines(fen, elo, count, signal) {
+// `plies` is the length of each predicted line (move + replies). Shorter lines
+// need fewer model runs, so the panel uses 2 and Studio replays use 5.
+export async function maiaLines(fen, elo, count, signal, plies = 5) {
   signal?.throwIfAborted();
-  const key = fen + "|" + elo + "|" + count;
+  const key = fen + "|" + elo + "|" + count + "|" + plies;
   const hit = lineCache.get(key);
   if (hit) {
     lineCache.delete(key);
     lineCache.set(key, hit);
     return copyLines(hit);
   }
-  const result = await computeLines(fen, elo, count, signal);
+  const result = await computeLines(fen, elo, count, signal, plies);
   lineCache.set(key, result);
   if (lineCache.size > 32) lineCache.delete(lineCache.keys().next().value);
   return copyLines(result);
 }
-async function computeLines(fen, elo, count, signal) {
+async function computeLines(fen, elo, count, signal, plies) {
   const [ranked] = await maiaRanks([new Chess(fen)], [elo]);
   const lines = ranked.slice(0, count).map(({ move, probability }) => ({
     san: move.san, probability, line: [move.san], board: new Chess(move.after),
   }));
-  for (let ply = 1; ply < 5; ply++) {
+  for (let ply = 1; ply < plies; ply++) {
     signal?.throwIfAborted();
     const live = lines.filter(item => !item.board.isGameOver());
     if (!live.length) break;

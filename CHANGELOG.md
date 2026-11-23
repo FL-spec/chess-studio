@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.7.1 · 2026-11-23
+
+### Fixed
+
+- Commentator reactions to your move no longer disappear when the opponent replies quickly. Each move is graded on its own search, and Commentator mode skips the hidden candidate search so reactions arrive within about a second.
+- Board arrows wait for the finished search instead of jumping between shallow candidates.
+- The origin-square highlight stays on its square while the arrow draws in.
+- The Commentator card no longer flickers when the panel redraws.
+- The move badge shows your own last move, labelled "Your" or "Their".
+- The panel no longer freezes when the game tab stops answering, for example after a page navigation or an extension reload. Requests to the tab time out and the update loop restarts itself.
+
+### Changed
+
+- New neutral palette: black and white with blue as the single accent, in light and dark mode.
+- The preview board in the panel can be hidden with **Hide board**, and no longer replays on hover.
+- The move explanation text is replaced by one **Why <move>? →** link that opens the line in Studio.
+- Practice and Review in Studio have distinct layouts: Practice is board-first, Review starts from an import card and shows quality dots and an evaluation graph.
+- Candidate moves default to 3, and Human predictions default to two plies (move and reply), so Human mode answers much faster. Both are adjustable in Settings.
+- The panel finds a game in a tab that was open before the extension was installed or reloaded, without a page refresh.
+- Engine and Human predictions are both computed after every move, so switching lenses is instant.
+- Commentators have a transparent background and a distinct motion per mood: a hop for Best, a nod for good moves, a head tilt while thinking, a wince for mistakes and a jolt for blunders.
+- Panel redraws during a search no longer flicker: rows keep a fixed height and animations only play on real changes.
+- The pinned panel and pop-out fit a 720 px tall screen.
+- New commentator avatars with professional clothing (blazer, sweater, hoodie) and clearer expressions.
+- More varied commentator lines, and no line repeats twice in a row.
+
 ## 1.7.0 · 2026-11-23
 
 ### Changed

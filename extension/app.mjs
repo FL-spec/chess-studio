@@ -98,6 +98,8 @@ let exercise;
 let noteTimer;
 let analysisPending = false;
 let gameScan;
+// Review scan results per move index, valid for one game (keyed by its PGN).
+let scanMarks = { pgn: "", grades: new Map(), evals: [] };
 let revision = 0;
 
 function label(text, cls) {
@@ -274,6 +276,12 @@ function renderMoves() {
         },
         index + 1 === cursor ? "chosen" : "",
       );
+      const mark = mode === "review" && scanMarks.pgn === game.pgn() && scanMarks.grades.get(index);
+      if (mark) {
+        choice.dataset.grade = mark.key;
+        choice.dataset.tone = mark.tone;
+        choice.title = move.san + " · " + mark.label;
+      }
       if (index + 1 === cursor) choice.setAttribute("aria-current", "step");
       row.append(choice);
     }
@@ -462,10 +470,12 @@ function render() {
   const gameView = mode === "practice" || mode === "review";
   $("game-view").hidden = $("top-actions").hidden = !gameView;
   $("extra").hidden = gameView;
+  document.body.dataset.mode = mode;
+  document.querySelector(".inspector-heading h2").textContent = mode === "practice" ? "Hints" : "Analysis";
   $("title").textContent = mode[0].toUpperCase() + mode.slice(1);
   $("eyebrow").textContent = {
-    practice: "Training board",
-    review: "Game analysis",
+    practice: "Play the local opponent",
+    review: "Analyse a game",
     library: "Saved games",
     settings: "Preferences",
   }[mode];
@@ -475,6 +485,7 @@ function render() {
     else element.removeAttribute("aria-current");
   }
   $("new-game").textContent = mode === "review" ? "Load position" : "New game";
+  $("review-empty").hidden = mode !== "review" || game.history().length > 0 || Boolean(exercise);
   $("show-analysis").checked = show;
   document.documentElement.dataset.theme = settings.theme;
   Object.assign(document.documentElement.dataset, {
@@ -780,7 +791,7 @@ function renderSettings() {
   control(analysis, "Website search depth", "Higher depth is stronger but slower.",
     "depth", recommended([[9, "Fast"], [12, "Balanced"], [16, "Deep"]], 16), siteValues, saveSite("depth"));
   control(analysis, "Candidate moves", "How many moves to list for each position.",
-    "lines", recommended([1, 2, 3, 4, 5].map((count) => [count, String(count)]), 5), siteValues, saveSite("lines"));
+    "lines", recommended([1, 2, 3, 4, 5].map((count) => [count, String(count)]), 3), siteValues, saveSite("lines"));
   control(analysis, "Default analysis mode", "Engine shows the strongest moves. Human shows the moves people play.",
     "lens", recommended([["engine", "Engine"], ["human", "Human"]], "engine"), siteValues, saveSite("lens"));
   const modelSettings = { maia: websiteOptions.maia !== false };
@@ -791,6 +802,8 @@ function renderSettings() {
     });
   control(analysis, "Human model level", "The rating of the players the human model imitates.",
     "elo", recommended(levels, 2000), siteValues, saveSite("elo"));
+  control(analysis, "Human prediction length", "Shorter is faster. 2 shows the move and the likely reply.",
+    "humanPlies", recommended([2, 3, 5].map((count) => [count, String(count)]), 2), siteValues, saveSite("humanPlies"));
 
   const arrows = group("Board & arrows", "arrows");
   control(arrows, "Automatic board arrows", "Draw the suggested move on the website board.",
@@ -800,6 +813,8 @@ function renderSettings() {
     siteValues, saveSite("arrowSide"));
   control(arrows, "Board colours", "Colours of the Studio and preview boards.",
     "board", recommended([["slate", "Slate"], ["green", "Green"], ["wood", "Wood"]], "slate"), ...prefs());
+  control(arrows, "Preview board in panel", "Show a small board that plays the selected move in the pop-out and pinned panel.",
+    "miniBoard", recommended([[true, "Show"], [false, "Hide"]], true), siteValues, saveSite("miniBoard"));
 
   const coaching = group("Coaching", "coaching");
   control(coaching, "Panel mode", "Coach shows the best moves and arrows. Commentator hides suggestions and comments on every move you play.",
@@ -834,7 +849,7 @@ function renderSettings() {
     row.append(text, picker);
     coaching.append(row);
   }
-  control(coaching, "Website move explanations", "Explain the selected move in plain words.",
+  control(coaching, "Why link", "Show a \"Why <move>?\" link that opens the line in Studio.",
     "coach", recommended([["always", "Show"], ["off", "Hide"]], "always"), siteValues, saveSite("coach"));
   control(coaching, "Move-quality badges", "Rate each move: Best, Good, Mistake and more.",
     "badges", recommended([[true, "Show"], [false, "Hide"]], true), ...prefs());
@@ -981,6 +996,26 @@ function newDialog() {
   dialog.showModal();
 }
 
+// Small White-perspective evaluation graph from the turning-point scan.
+function evalGraph(evals) {
+  const points = evals.map((value, index) => [index, value]).filter(([, value]) => Number.isFinite(value));
+  if (points.length < 2) return null;
+  const width = 280, height = 64, last = evals.length - 1 || 1;
+  const y = value => (height / 2) * (1 - Math.max(-1, Math.min(1, value / 600)));
+  const path = points.map(([index, value], at) => (at ? "L" : "M") + ((index / last) * width).toFixed(1) + " " + y(value).toFixed(1)).join(" ");
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+  svg.setAttribute("class", "eval-graph");
+  svg.setAttribute("preserveAspectRatio", "none");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Evaluation over the game, White on top");
+  svg.innerHTML = '<rect class="eval-graph-black" x="0" y="' + height / 2 + '" width="' + width + '" height="' + height / 2 + '"/>' +
+    '<line class="eval-graph-mid" x1="0" x2="' + width + '" y1="' + height / 2 + '" y2="' + height / 2 + '"/>' +
+    '<path class="eval-graph-area" d="' + path + " L" + width + " " + height / 2 + " L0 " + height / 2 + ' Z"/>' +
+    '<path class="eval-graph-line" d="' + path + '"/>';
+  return svg;
+}
+$("review-load").onclick = () => loadDialog();
 for (const element of document.querySelectorAll("[data-mode]"))
   element.onclick = () => showMode(element.dataset.mode);
 $("new-game").onclick = () => (mode === "review" ? loadDialog() : newDialog());
@@ -1003,6 +1038,7 @@ $("find-turning").onclick = async () => {
   results.replaceChildren(progress, bar, skeleton);
   const losses = [];
   const grades = { w: [], b: [] };
+  const marks = { pgn: game.pgn(), grades: new Map(), evals: [] };
   const normalize = (line) =>
     line.type === "cp" ? line.value : Math.sign(line.value) * 10000;
   try {
@@ -1014,8 +1050,11 @@ $("find-turning").onclick = async () => {
       const position = new Chess(move.before);
       const [best] = await analyze(position, { depth: 8, count: 1, signal });
       if (!best) continue;
+      marks.evals[index] = normalize(best) * (move.color === "w" ? 1 : -1);
       if (best.pv[0] === uci(move)) {
-        grades[move.color].push(gradeMove(toCentipawns(best), toCentipawns(best), true));
+        const grade = gradeMove(toCentipawns(best), toCentipawns(best), true);
+        grades[move.color].push(grade);
+        marks.grades.set(index, grade);
         continue;
       }
       const [played] = await analyze(position, {
@@ -1025,7 +1064,9 @@ $("find-turning").onclick = async () => {
         only: uci(move),
       });
       if (played) {
-        grades[move.color].push(gradeMove(toCentipawns(best), toCentipawns(played)));
+        const grade = gradeMove(toCentipawns(best), toCentipawns(played));
+        grades[move.color].push(grade);
+        marks.grades.set(index, grade);
         const loss = normalize(best) - normalize(played);
         if (loss >= 60) losses.push({ index, move, loss, best, played });
       }
@@ -1047,6 +1088,10 @@ $("find-turning").onclick = async () => {
       rings.append(ring);
     }
     results.append(rings);
+    scanMarks = marks;
+    const graph = evalGraph(marks.evals);
+    if (graph) results.append(graph);
+    renderMoves();
     progress.textContent =
       "Largest evaluation changes" +
       (game.history().length > 100 ? " · First 100 moves" : "");

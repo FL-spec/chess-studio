@@ -1,4 +1,6 @@
 (() => {
+  if (window.__chessStudioFenReader) return;
+  window.__chessStudioFenReader = true;
   const supported =
     /^\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/)?(?:play\/(?:computer|coach|online)|game\/live|live|analysis)(?:\/|$)/i;
   function read() {

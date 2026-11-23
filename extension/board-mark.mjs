@@ -64,11 +64,16 @@ export function createLineOverlay(document, lines, flipped) {
     arrow.dataset.move = move;
     arrow.dataset.kind = kind;
     arrow.dataset.rank = String(rank);
+    // The origin-square tint stays on its square: it fades in under the
+    // arrows and never slides with the arrow's draw-in animation.
     if (rank === 0 && kind === "move") {
-      arrow.append(make("rect", {
+      const square = make("rect", {
         x: fixed(x1 - 0.5), y: fixed(y1 - 0.5), width: 1, height: 1,
         fill: color, "fill-opacity": "0.2",
-      }));
+      });
+      square.dataset.origin = move;
+      overlay.prepend(square);
+      if (animate) square.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: "ease-out" });
     }
     const shadow = make("g", { transform: "translate(0 0.03)", fill: SHADOW, stroke: SHADOW,
       opacity: "0.26", "stroke-linejoin": "round", "stroke-linecap": "round" });

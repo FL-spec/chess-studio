@@ -1,6 +1,6 @@
 import { moveEvidence } from "./analysis-evidence.mjs";
 import { createLineOverlay } from "./board-mark.mjs";
-import { drawBoard, explain, moveVisual } from "./chess-view.mjs";
+import { drawBoard, moveVisual } from "./chess-view.mjs";
 import { Chess } from "./vendor/chess.mjs";
 import { score, uci } from "./engine.mjs";
 import { MOOD_BY_GRADE, coachSvg, opponentLine, reactionLine } from "./coaches.mjs";
@@ -13,15 +13,20 @@ function applyDisplayPreferences(prefs = {}) {
   });
 }
 let coachId = "nova";
+let miniOpen = true;
 if (globalThis.chrome?.storage?.local) {
   chrome.storage.local.get(["preferences", "websiteOptions"]).then(({ preferences, websiteOptions }) => {
     applyDisplayPreferences(preferences);
     coachId = websiteOptions?.coachCharacter || coachId;
+    miniOpen = websiteOptions?.miniBoard !== false;
   }, () => {});
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes.preferences) applyDisplayPreferences(changes.preferences.newValue);
-    if (changes.websiteOptions) coachId = changes.websiteOptions.newValue?.coachCharacter || "nova";
+    if (changes.websiteOptions) {
+      coachId = changes.websiteOptions.newValue?.coachCharacter || "nova";
+      miniOpen = changes.websiteOptions.newValue?.miniBoard !== false;
+    }
   });
 }
 async function setWebsiteOption(key, value) {
@@ -52,6 +57,7 @@ function viewToggle(current) {
 }
 // Accuracy of the user's moves this session, per tab (UI-side only).
 const accuracyLogs = new Map();
+let lastCardSignature = "";
 function reactionCard(view) {
   const card = document.createElement("section");
   card.className = "coach-card";
@@ -60,49 +66,49 @@ function reactionCard(view) {
   avatar.className = "coach-avatar";
   const bubble = document.createElement("div");
   bubble.className = "coach-bubble";
-  const grade = view.grade;
-  const last = view.last;
-  const mover = last?.color;
-  const mine = Boolean(grade && last && (!view.playerColor || mover === view.playerColor));
-  if (!grade || !last) {
+  const mineEntry = view.myGrade;
+  const oppEntry = view.oppGrade;
+  const yourTurn = !view.playerColor || view.playerColor === new Chess(view.fen).turn();
+  if (!mineEntry) {
     avatar.innerHTML = coachSvg(coachId, "idle");
     card.dataset.mood = "idle";
-    bubble.append(describe(view.playerColor && view.playerColor !== new Chess(view.fen).turn()
-      ? "Waiting for your opponent…" : "Play a move and I’ll react.", "coach-say"));
+    bubble.append(describe(yourTurn ? "Play a move and I’ll react." : "Waiting for your opponent…", "coach-say"));
+    if (oppEntry) bubble.append(describe(opponentLine(oppEntry.grade.key, oppEntry.move.san), "coach-hint"));
     card.append(avatar, bubble);
     return card;
   }
-  if (mine) {
-    const key = String(view.source) + ":" + (view.playerColor || mover);
-    const log = accuracyLogs.get(key) || new Map();
-    log.set(last.after, grade.loss);
-    accuracyLogs.set(key, log);
-    const mood = MOOD_BY_GRADE[grade.key] || "happy";
-    avatar.innerHTML = coachSvg(coachId, mood);
-    card.dataset.mood = mood;
-    card.dataset.grade = grade.key;
-    card.dataset.key = last.after;
-    const badge = document.createElement("span");
-    badge.className = "grade-badge";
-    badge.dataset.tone = grade.tone;
-    badge.append(describe(grade.symbol, "grade-symbol", "span"), describe(last.san + " · " + grade.label, "", "span"));
-    if (view.gradeCelebrate) badge.dataset.celebrate = "";
-    const stats = document.createElement("div");
-    stats.className = "coach-stats";
-    stats.append(badge);
-    if (view.streak >= 2) stats.append(describe(view.streak + " in a row", "streak", "span"));
-    const losses = [...log.values()];
-    const accuracy = losses.reduce((sum, loss) => sum + moveAccuracy(loss), 0) / losses.length;
-    stats.append(describe("Accuracy " + Math.round(accuracy) + "%", "coach-accuracy", "span"));
-    bubble.append(describe(reactionLine(grade.key, last.after + last.san, coachId, last.san), "coach-say"), stats);
-  } else {
-    avatar.innerHTML = coachSvg(coachId, "idle");
-    card.dataset.mood = "idle";
-    card.dataset.opponent = "";
-    bubble.append(describe(opponentLine(grade.key, last.san), "coach-say coach-say-quiet"),
-      describe("Your move. Take your time.", "coach-hint"));
-  }
+  const { grade, move } = mineEntry;
+  const key = String(view.source) + ":" + move.color;
+  const log = accuracyLogs.get(key) || new Map();
+  log.set(move.after, grade.loss);
+  accuracyLogs.set(key, log);
+  const mood = MOOD_BY_GRADE[grade.key] || "happy";
+  avatar.innerHTML = coachSvg(coachId, mood);
+  card.dataset.mood = mood;
+  card.dataset.grade = grade.key;
+  card.dataset.key = move.after;
+  const badge = document.createElement("span");
+  badge.className = "grade-badge";
+  badge.dataset.tone = grade.tone;
+  badge.append(describe(grade.symbol, "grade-symbol", "span"), describe(move.san + " · " + grade.label, "", "span"));
+  if (view.gradeCelebrate && view.gradeMove?.after === move.after) badge.dataset.celebrate = "";
+  const stats = document.createElement("div");
+  stats.className = "coach-stats";
+  stats.append(badge);
+  if (view.streak >= 2) stats.append(describe(view.streak + " in a row", "streak", "span"));
+  const losses = [...log.values()];
+  const accuracy = losses.reduce((sum, loss) => sum + moveAccuracy(loss), 0) / losses.length;
+  stats.append(describe("Accuracy " + Math.round(accuracy) + "%", "coach-accuracy", "span"));
+  bubble.append(describe(reactionLine(grade.key, move.after + move.san, coachId, move.san), "coach-say"), stats);
+  // The opponent's reply, if it came after the user's move.
+  if (oppEntry && oppEntry.move.before === move.after)
+    bubble.append(describe(opponentLine(oppEntry.grade.key, oppEntry.move.san), "coach-hint"));
+  else if (!yourTurn) bubble.append(describe("Waiting for your opponent…", "coach-hint"));
   card.append(avatar, bubble);
+  // Redraws (engine progress, grading) must not replay the entrance animation.
+  const signature = (card.dataset.key || "idle") + "|" + bubble.textContent;
+  if (signature === lastCardSignature) card.dataset.static = "";
+  lastCardSignature = signature;
   return card;
 }
 export function describe(text, cls, tag = "p") {
@@ -157,15 +163,18 @@ export function renderScanning(container, title, detail) {
   return box;
 }
 function gradeBadge(view) {
-  const grade = view.grade;
+  const grade = (view.myGrade || view.oppGrade)?.grade || view.grade;
   const badge = document.createElement("span");
   badge.className = "grade-badge";
   badge.dataset.grade = grade.key;
   badge.dataset.tone = grade.tone;
   badge.setAttribute("role", "status");
-  badge.title = view.last.san + " was " + grade.label.toLowerCase();
-  badge.append(describe(grade.symbol, "grade-symbol", "span"), describe(view.last.san + " · " + grade.label, "", "span"));
-  if (view.gradeCelebrate) badge.dataset.celebrate = "";
+  const entry = view.myGrade || view.oppGrade;
+  const san = entry?.move.san || view.last?.san || "";
+  badge.title = san + " was " + grade.label.toLowerCase();
+  const who = view.playerColor ? (view.myGrade ? "Your " : "Their ") : "";
+  badge.append(describe(grade.symbol, "grade-symbol", "span"), describe(who + san + " · " + grade.label, "", "span"));
+  if (view.gradeCelebrate && view.myGrade && view.gradeMove?.after === view.myGrade.move.after) badge.dataset.celebrate = "";
   return badge;
 }
 function action(text, handler) {
@@ -190,16 +199,17 @@ function playerLabel(view, color, toMove, onClick) {
   return player;
 }
 
-function lineDetails(evidence) {
-  const note = document.createElement("section");
-  note.className = "coach-note";
-  note.setAttribute("aria-label", "Selected move explanation");
-  note.append(describe(evidence.effect, "coach-effect"));
-  if (evidence.reply) note.append(describe(evidence.line, "coach-line"));
-  return note;
+// Redraw memory: companion.mjs rebuilds the DOM on every engine depth, so the
+// view remembers what it last showed and only animates real changes.
+const stable = { badge: "", choice: "", mini: "", rows: 3 };
+function markStatic(element, slot, signature) {
+  if (stable[slot] === signature) element.dataset.static = "";
+  stable[slot] = signature;
 }
 
 export function renderCompanion(container, board, view, actions = {}) {
+  // Looping indicators keep their phase across redraws instead of restarting.
+  document.documentElement.style.setProperty("--now", String(Math.round(performance.now())));
   const studio = document.body.classList.contains("website");
   const isWebsite = view.mode === "website";
   const state = view.controls;
@@ -229,10 +239,12 @@ export function renderCompanion(container, board, view, actions = {}) {
     turnRow.append(owner);
   }
   header.append(turnRow, source);
-  if (view.grade && view.last) {
+  if (view.myGrade || view.oppGrade) {
     const progress = document.createElement("div");
     progress.className = "game-progress";
-    progress.append(gradeBadge(view));
+    const badge = gradeBadge(view);
+    markStatic(badge, "badge", badge.dataset.grade + "|" + badge.textContent);
+    progress.append(badge);
     if (view.streak >= 2) {
       const streak = describe(view.streak + " in a row", "streak", "span");
       streak.title = "Best or excellent moves in a row";
@@ -279,7 +291,6 @@ export function renderCompanion(container, board, view, actions = {}) {
   replay.append(previous, counter, next);
   const top = view.flipped ? "w" : "b";
   let mini = null;
-  let miniKey = "";
   if (studio) {
     const frame = document.createElement("section");
     frame.className = "position-board";
@@ -294,13 +305,40 @@ export function renderCompanion(container, board, view, actions = {}) {
     mini.setAttribute("aria-label", "Preview of the selected move");
     mini.title = "Click to replay";
     mini.onclick = () => playMini();
-    mini.onpointerenter = () => playMini();
   }
   container.append(analysis);
   const stage = document.createElement("div");
   stage.className = "mini-stage";
   if (mini) {
-    stage.append(mini);
+    const disclosure = document.createElement("div");
+    disclosure.className = "mini-disclosure";
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "mini-toggle";
+    const drawer = document.createElement("div");
+    drawer.className = "mini-drawer";
+    drawer.id = "mini-drawer";
+    toggle.setAttribute("aria-controls", drawer.id);
+    const inner = document.createElement("div");
+    inner.className = "mini-drawer-inner";
+    inner.append(mini);
+    drawer.append(inner);
+    const setOpen = open => {
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.textContent = open ? "Hide board" : "Show board";
+      drawer.dataset.open = String(open);
+      drawer.inert = !open;
+    };
+    setOpen(miniOpen);
+    toggle.onclick = () => {
+      miniOpen = !miniOpen;
+      setOpen(miniOpen);
+      if (miniOpen) setTimeout(playMini, 280);
+      // Save after the height transition so the panel re-render does not cut it short.
+      setTimeout(() => setWebsiteOption("miniBoard", miniOpen).catch(() => {}), 320);
+    };
+    disclosure.append(toggle, drawer);
+    stage.append(disclosure);
     analysis.append(stage);
   }
   const evaluationHost = mini ? stage : analysis;
@@ -312,10 +350,12 @@ export function renderCompanion(container, board, view, actions = {}) {
       evaluation.classList.add("panel-evaluation");
       evaluationHost.append(evaluation);
     } else if (view.pending) {
-      const waiting = describe("White evaluation", "panel-evaluation eval-waiting");
+      // Same structure as the meter so the layout does not move when it arrives.
+      const waiting = document.createElement("div");
+      waiting.className = "eval panel-evaluation eval-waiting";
       const progress = document.createElement("progress");
       progress.setAttribute("aria-label", "Calculating White evaluation");
-      waiting.append(progress);
+      waiting.append(describe("White evaluation", "muted", "span"), progress, describe("…", "score", "span"));
       evaluationHost.append(waiting);
     } else if (board.isGameOver()) {
       const winner = board.turn() === "w" ? "Black" : "White";
@@ -354,6 +394,7 @@ export function renderCompanion(container, board, view, actions = {}) {
   const list = document.createElement("div");
   list.className = "companion-lines";
   const details = document.createElement("div");
+  details.className = "why-slot";
   const depthBar = document.createElement("div");
   depthBar.className = "depth-bar";
   depthBar.setAttribute("aria-hidden", "true");
@@ -438,6 +479,15 @@ export function renderCompanion(container, board, view, actions = {}) {
       button.append(...moveVisual(row.sequence[actionPly()]), describe(row.metric, "score", "span"));
       list.append(button);
     }
+    if (choices.length) stable.rows = choices.length;
+    const searching = view.show && state.lens === "engine" && (view.pending || view.searching);
+    for (let index = choices.length; searching && index < stable.rows; index += 1) {
+      const skeleton = document.createElement("div");
+      skeleton.className = "move-row-skeleton";
+      skeleton.setAttribute("aria-hidden", "true");
+      skeleton.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+      list.append(skeleton);
+    }
   }
   function actionPly() {
     return view.replyFocus ? 1 : 0;
@@ -472,15 +522,20 @@ export function renderCompanion(container, board, view, actions = {}) {
     setPressed(single, !currentOptions().all);
     setPressed(all, currentOptions().all);
     setPressed(showOther, currentOptions().other);
-    for (const row of list.children)
+    for (const row of list.querySelectorAll("button"))
       setPressed(row, row.dataset.choice === selected?.key && !currentOptions().all);
+    markStatic(list, "choice", view.fen + "|" + state.lens + "|" + Boolean(view.replyFocus) + "|" + (selected?.key || ""));
     details.replaceChildren();
-    if (selected && view.coachVisible) {
-      const root = view.replyFocus ? selected.sequence[0].after : view.fen;
-      details.append(lineDetails(moveEvidence(root, selected.pv.slice(actionPly()))));
+    // One compact link replaces the long explanation: Studio replays the line.
+    const openStudio = document.getElementById("open");
+    if (!studio && selected && openStudio && view.coachVisible !== false) {
+      const why = action("", () => openStudio.click());
+      why.className = "why-link";
+      why.dataset.focusKey = "why";
+      why.title = "Open this line in Studio and step through it";
+      why.append(describe("Why " + selected.san + "?", "", "span"), describe("→", "why-arrow", "span"));
+      details.append(why);
     }
-    if (view.last && view.coachVisible)
-      details.append(describe("Why " + view.last.san + "?", "companion-subheading", "h2"), describe(explain(view.last), "muted"));
     const boardArrows = arrows();
     if (studio || boardElement.isConnected) drawPosition(boardArrows);
     if (mini) drawMini(selected);
@@ -512,21 +567,24 @@ export function renderCompanion(container, board, view, actions = {}) {
   }
   function drawMini(selected) {
     const key = view.fen + "|" + (selected?.move || "") + "|" + (selected?.reply || "") + "|" + Boolean(view.replyFocus);
-    if (key === miniKey) return;
-    miniKey = key;
+    // Animate a line once, after the search settles; redraws show it still.
+    const same = key === stable.mini || Boolean(view.searching || view.pending);
+    if (!same) stable.mini = key;
     mini.dataset.position = "";
     const start = view.replyFocus && selected ? new Chess(selected.sequence[0].after) : board;
     drawBoard(mini, start, { flipped: view.flipped, last: view.replyFocus ? selected?.sequence[0] : view.last });
     mini.plan = selected ? (view.replyFocus ? [selected.sequence[1]] : [selected.sequence[0], selected.sequence[1]]).filter(Boolean) : [];
-    playMini();
+    // Same line as the last draw: show its end state without replaying it.
+    playMini(same);
   }
-  function playMini() {
+  function playMini(still = false) {
     if (!mini?.plan?.length || mini.playing) return;
-    const reduce = !(window.matchMedia("(prefers-reduced-motion: no-preference)").matches && document.documentElement.dataset.motion !== "reduced");
+    const reduce = still || !(window.matchMedia("(prefers-reduced-motion: no-preference)").matches && document.documentElement.dataset.motion !== "reduced");
     const square = name => mini.querySelector('[data-square="' + name + '"]');
     const cell = mini.querySelector(".square")?.getBoundingClientRect();
     if (!cell?.width) return;
     mini.anims?.forEach(item => item.cancel());
+    if (!still) mini.querySelectorAll("img").forEach(image => { image.style.opacity = ""; });
     mini.querySelectorAll(".mini-ghost").forEach(node => node.remove());
     let delay = reduce ? 0 : 250;
     const animations = [];
@@ -542,7 +600,13 @@ export function renderCompanion(container, board, view, actions = {}) {
         width: from.width + "px", height: from.height + "px" });
       mini.append(ghost);
       const dx = to.left - from.left, dy = to.top - from.top;
-      if (reduce) { ghost.style.transform = "translate(" + dx + "px," + dy + "px)"; continue; }
+      if (reduce) {
+        ghost.style.transform = "translate(" + dx + "px," + dy + "px)";
+        image.style.opacity = ".25";
+        const captured = square(move.to).querySelector("img");
+        if (captured && captured !== image) captured.style.opacity = "0";
+        continue;
+      }
       const hide = image.animate([{ opacity: 1 }, { opacity: 0.25 }], { duration: 1, delay, fill: "forwards" });
       const slide = ghost.animate([
         { transform: "none", opacity: 0 },

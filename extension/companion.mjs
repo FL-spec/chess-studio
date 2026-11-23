@@ -121,7 +121,9 @@ function draw(view) {
   const source = view.source;
   const signal = controller?.signal;
   const send = (lines, interaction) => {
-    if (view.automaticArrows) showSourceLines(view, lines);
+    // Board arrows wait for the completed search so they never jump between
+    // shallow candidates while the engine is still deepening.
+    if (view.automaticArrows) { if (!view.searching) showSourceLines(view, lines); }
     else if (source && !view.generic && interaction) {
       chrome.tabs.sendMessage(source, {
         type: "chess-studio-mark",
@@ -143,7 +145,7 @@ function draw(view) {
       const count = websiteOptions.lines;
       if (lens === "human")
         return (websiteOptions.maia && !view.maiaError
-          ? await maiaLines(board.fen(), websiteOptions.elo, count, signal)
+          ? await maiaLines(board.fen(), websiteOptions.elo, count, signal, websiteOptions.humanPlies || 2)
           : humanLines(board.fen(), websiteOptions.elo, count)).map(item => ({
           pv: [setup, ...item.line],
           metric: Math.round(item.probability * 100) + "%",
@@ -165,8 +167,8 @@ function draw(view) {
     [...root.querySelectorAll("[data-focus-key]")]
       .find(node => node.dataset.focusKey === focusKey)?.focus();
 }
-const PROGRESS_MS = 120;
-const PROGRESS_MIN_DEPTH = 8;
+const PROGRESS_MS = 250;
+const PROGRESS_MIN_DEPTH = 10;
 // Redraw partial engine lines at most every PROGRESS_MS, and only when the
 // candidate moves or their scores change, to keep the panel calm.
 function progressiveDraw(view, target) {
@@ -174,11 +176,14 @@ function progressiveDraw(view, target) {
   const flush = () => {
     timer = undefined;
     if (stopped || !pending || renderedSite !== view || mode !== "website" || !view.pending) return;
+    // Commentator mode shows no candidates, so partial results need no redraw.
+    if (view.reactionsOnly) return;
     const lines = pending;
     pending = undefined;
     last = performance.now();
     view.depth = lines[0].depth;
-    const signature = lines.map(line => line.pv[0] + line.type + line.value).join();
+    // Redraw only for a new move order or a score change of 0.1 or more.
+    const signature = lines.map(line => line.pv[0] + line.type + (line.type === "cp" ? Math.round(line.value / 10) : line.value)).join();
     if (signature === shown) return;
     shown = signature;
     view.candidates = lines;
@@ -216,20 +221,52 @@ const statuses = {
   unavailable: ["Looking for a game…", "Open a game on Chess.com or Lichess. Reload the tab if it was open before Chess Studio."],
 };
 
+// A tab that never answers (navigation, back/forward cache, a reloaded
+// extension) must not freeze the panel: every request has a deadline.
+function askTab(id, message, ms = 1500) {
+  return Promise.race([
+    chrome.tabs.sendMessage(id, message),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+  ]);
+}
+let lastTick = Date.now();
+const injected = new Set();
+const READER_SITES = /^https:\/\/(?:www\.)?(?:chess\.com|lichess\.org)\//;
+async function injectReaders(tabId) {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (!READER_SITES.test(tab.url || "")) return false;
+    if (/chess\.com/.test(tab.url))
+      await chrome.scripting.executeScript({ target: { tabId }, files: ["read-fen.js"], world: "MAIN" });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["detect-entry.js"] });
+    return true;
+  } catch {
+    return false;
+  }
+}
 async function followWebsite() {
+  lastTick = Date.now();
   const version = revision;
   const id = sourceOverride || active?.id;
   let observation;
   try {
     if (id)
-      observation = await chrome.tabs.sendMessage(id, "chess-studio-position");
+      observation = await askTab(id, "chess-studio-position");
   } catch {
     /* No supported content script in the current tab. */
+  }
+  // Tabs opened before the extension was installed or reloaded have no
+  // content script yet: add it once, so the user never has to refresh.
+  if (id && !observation && !injected.has(id)) {
+    injected.add(id);
+    if (await injectReaders(id)) {
+      try { observation = await askTab(id, "chess-studio-position", 2500); } catch { /* still loading */ }
+    }
   }
   if (id && (!observation || observation.status === "unsupported")) {
     try {
       observation =
-        (await chrome.tabs.sendMessage(id, "chess-studio-generic-position")) ||
+        (await askTab(id, "chess-studio-generic-position")) ||
         observation;
     } catch {
       /* The user has not granted access to this tab. */
@@ -331,8 +368,11 @@ async function followWebsite() {
                 websiteOptions.lines,
               )
             : [],
+        // Commentator mode shows no candidates: skip the search so grading
+        // gets the engine to itself and reactions arrive quickly.
         pending:
           websiteOptions.enabled &&
+          websiteOptions.view !== "reactions" &&
           !board.isGameOver(),
       };
       if (opening) {
@@ -352,7 +392,7 @@ async function followWebsite() {
           if (view.humanPending || view.human.length || view.maiaError) return;
           view.humanModel = "Maia-3";
           view.humanPending = true;
-          maiaLines(view.fen, websiteOptions.elo, websiteOptions.lines, controller.signal)
+          maiaLines(view.fen, websiteOptions.elo, websiteOptions.lines, controller.signal, websiteOptions.humanPlies || 2)
             .then(lines => { view.human = lines; })
             .catch(error => {
               if (error.name === "AbortError" || renderedSite !== view) return;
@@ -366,8 +406,12 @@ async function followWebsite() {
             });
         };
       }
+      attachGrades(view);
       renderedSite = view;
       draw(view);
+      gradeMoveOf(view);
+      // Compute both lenses after every move so switching Engine/Human is instant.
+      if (view.pending) view.loadHuman?.();
       if (view.pending) {
         // Progressive results: show completed shallow iterations while the search
         // deepens. `view.searching` / `view.depth` / `view.targetDepth` describe it;
@@ -390,7 +434,6 @@ async function followWebsite() {
             view.candidates = lines;
             view.depth = lines[0]?.depth ?? view.targetDepth;
             draw(view);
-            gradeLastMove(view, lines[0], controller.signal).catch(() => {});
           })
           .catch((error) => {
             progress.stop();
@@ -405,31 +448,67 @@ async function followWebsite() {
   }
   timer = setTimeout(() => followWebsite().catch(showError), 450);
 }
-// Move-quality grading. The position before the last move is usually cached by
-// the engine (it was the previous live position), so this costs little.
-const gradeLogs = new Map();
-async function gradeLastMove(view, after, signal) {
+// Move-quality grading. Each new move is graded on its own search, so a fast
+// reply from the opponent (e.g. a Chess.com bot) never cancels the reaction to
+// the user's move. Grades live per source tab and are re-attached to every view.
+const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+const GRADE_DEPTH = 12;
+const gradeStores = new Map();
+function gradeStore(source) {
+  let store = gradeStores.get(source);
+  if (!store) gradeStores.set(source, (store = { mine: null, opp: null, latest: null, log: [], seen: new Set() }));
+  return store;
+}
+function attachGrades(view) {
+  const store = gradeStores.get(view.source);
+  if (!store) return;
+  // Only show grades for moves of the game on screen.
+  const known = (entry) => entry && view.fen !== entry.move.before;
+  view.myGrade = known(store.mine) ? store.mine : null;
+  view.oppGrade = known(store.opp) ? store.opp : null;
+  view.grade = store.latest?.grade || null;
+  view.gradeMove = store.latest?.move || null;
+  view.streak = streak(store.log);
+  view.gradeCelebrate = Boolean(store.latest?.celebrate);
+}
+async function gradeMoveOf(view) {
   const last = view.last;
-  if (!last?.before || !after || !websiteOptions.enabled) return;
-  const before = new Chess(last.before);
-  const [best] = await analyze(before, { depth: websiteOptions.depth, count: 1, signal });
-  if (!best?.pv?.length || renderedSite !== view) return;
+  if (!last?.before || !last?.after || !websiteOptions.enabled) return;
+  const store = gradeStore(view.source);
+  if (store.seen.has(last.after)) return;
+  store.seen.add(last.after);
+  if (last.before.startsWith(START_FEN)) {
+    store.mine = store.opp = store.latest = null;
+    store.log = [];
+  }
+  const depth = Math.min(websiteOptions.depth, GRADE_DEPTH);
+  const [[best], [reply]] = await Promise.all([
+    analyze(new Chess(last.before), { depth, count: 1 }),
+    analyze(new Chess(last.after), { depth, count: 1 }),
+  ]);
+  if (!best?.pv?.length) return;
   const bestMove = best.pv[0];
   const wasBest = bestMove.slice(0, 4) === last.from + last.to &&
     (bestMove[4] || "") === (last.promotion || "");
-  // `best` scores the mover; `after` scores the opponent, so negate it.
-  const grade = gradeMove(toCentipawns(best), -toCentipawns(after), wasBest);
-  const mine = !view.playerColor || last.color === view.playerColor;
-  const key = view.source + ":" + last.color;
-  let log = gradeLogs.get(key);
-  // A move from the starting position begins a new game.
-  if (!log || last.before.startsWith("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR")) log = [];
-  if (log.at(-1)?.fen !== last.after) log.push({ ...grade, fen: last.after });
-  gradeLogs.set(key, log);
-  view.grade = grade;
-  view.streak = mine ? streak(log) : 0;
-  view.gradeCelebrate = mine && grade.key === "best";
-  if (renderedSite === view) draw(view);
+  // After the move the side to move is the opponent: a finished game scores 0
+  // for checkmate delivered (mate for the mover), otherwise negate the reply.
+  const afterGame = new Chess(last.after);
+  const afterCp = afterGame.isCheckmate() ? 10000 : afterGame.isGameOver() ? 0 : -toCentipawns(reply);
+  const grade = gradeMove(toCentipawns(best), afterCp, wasBest);
+  const live = renderedSite?.source === view.source ? renderedSite : null;
+  const playerColor = live?.playerColor ?? view.playerColor;
+  const mine = !playerColor || last.color === playerColor;
+  const move = { san: last.san, color: last.color, before: last.before, after: last.after, from: last.from, to: last.to };
+  const entry = { grade, move, celebrate: mine && grade.key === "best" };
+  if (mine) {
+    store.mine = entry;
+    store.log.push(grade);
+  } else store.opp = entry;
+  store.latest = entry;
+  if (live) {
+    attachGrades(live);
+    draw(live);
+  }
 }
 function refresh() {
   reset();
@@ -525,3 +604,7 @@ function showError() {
 }
 applyTheme();
 refresh();
+// Watchdog: restart the follow loop if it has not ticked for a while.
+setInterval(() => {
+  if (mode === "website" && Date.now() - lastTick > 4000) refresh();
+}, 2000);
