@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.7.2 · 2026-11-23
+
+### Changed
+
+- In the pop-out and pinned panel, your player button is always on the left, and the last-move grade sits below the player buttons.
+- The Commentator is now a live feed: the coach stays on screen and only changes expression, and every move (yours and your opponent's) adds a comment in the same style with its grade. Existing comments never redraw, so the panel no longer flickers when moves arrive. New comments arrive after a short pause, and earlier ones collapse behind **Show earlier moves**.
+- In Coach mode, **Why <move>? →** opens the line in Studio, so the separate Open Studio button is gone. In Commentator mode Open Studio is a small button at the bottom.
+- Studio's line view: a prominent **Back to game** button, large step arrows, and clicking the board plays the next move of the line.
+
 ## 1.7.1 · 2026-11-23
 
 ### Fixed

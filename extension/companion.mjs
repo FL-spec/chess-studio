@@ -456,7 +456,7 @@ const GRADE_DEPTH = 12;
 const gradeStores = new Map();
 function gradeStore(source) {
   let store = gradeStores.get(source);
-  if (!store) gradeStores.set(source, (store = { mine: null, opp: null, latest: null, log: [], seen: new Set() }));
+  if (!store) gradeStores.set(source, (store = { mine: null, opp: null, latest: null, log: [], seen: new Set(), history: [] }));
   return store;
 }
 function attachGrades(view) {
@@ -470,6 +470,12 @@ function attachGrades(view) {
   view.gradeMove = store.latest?.move || null;
   view.streak = streak(store.log);
   view.gradeCelebrate = Boolean(store.latest?.celebrate);
+  // Graded moves of this game in board order, for the commentary feed.
+  view.gradeHistory = store.history.filter((entry) => entry.ply <= plyOf(view.fen));
+}
+function plyOf(fen) {
+  const [, turn, , , , move] = fen.split(" ");
+  return (Number(move) - 1) * 2 + (turn === "b" ? 1 : 0);
 }
 async function gradeMoveOf(view) {
   const last = view.last;
@@ -480,6 +486,7 @@ async function gradeMoveOf(view) {
   if (last.before.startsWith(START_FEN)) {
     store.mine = store.opp = store.latest = null;
     store.log = [];
+    store.history = [];
   }
   const depth = Math.min(websiteOptions.depth, GRADE_DEPTH);
   const [[best], [reply]] = await Promise.all([
@@ -499,7 +506,9 @@ async function gradeMoveOf(view) {
   const playerColor = live?.playerColor ?? view.playerColor;
   const mine = !playerColor || last.color === playerColor;
   const move = { san: last.san, color: last.color, before: last.before, after: last.after, from: last.from, to: last.to };
-  const entry = { grade, move, celebrate: mine && grade.key === "best" };
+  const entry = { grade, move, mine, ply: plyOf(last.after), celebrate: mine && grade.key === "best" };
+  store.history = [...store.history.filter((item) => item.ply < entry.ply), entry]
+    .sort((a, b) => a.ply - b.ply).slice(-12);
   if (mine) {
     store.mine = entry;
     store.log.push(grade);

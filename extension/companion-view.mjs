@@ -56,60 +56,132 @@ function viewToggle(current) {
   return group;
 }
 // Accuracy of the user's moves this session, per tab (UI-side only).
-const accuracyLogs = new Map();
-let lastCardSignature = "";
-function reactionCard(view) {
-  const card = document.createElement("section");
-  card.className = "coach-card";
-  card.setAttribute("aria-live", "polite");
-  const avatar = document.createElement("div");
-  avatar.className = "coach-avatar";
-  const bubble = document.createElement("div");
-  bubble.className = "coach-bubble";
-  const mineEntry = view.myGrade;
-  const oppEntry = view.oppGrade;
-  const yourTurn = !view.playerColor || view.playerColor === new Chess(view.fen).turn();
-  if (!mineEntry) {
-    avatar.innerHTML = coachSvg(coachId, "idle");
-    card.dataset.mood = "idle";
-    bubble.append(describe(yourTurn ? "Play a move and I’ll react." : "Waiting for your opponent…", "coach-say"));
-    if (oppEntry) bubble.append(describe(opponentLine(oppEntry.grade.key, oppEntry.move.san), "coach-hint"));
-    card.append(avatar, bubble);
-    return card;
+// Commentator: one persistent element per game tab. Redraws reuse it, so
+// nothing flickers; only a changed expression and new comments animate.
+let commentary = null;
+const MOTION = {
+  delighted: [[0, "translateY(0) scale(1)"], [0.25, "translateY(0) scale(1.06, .92)"], [0.5, "translateY(-14px) scale(.97, 1.05)"], [0.75, "translateY(0) scale(1.03, .97)"], [1, "none"]],
+  happy: [[0, "none"], [0.4, "rotate(-3deg) translateY(2px)"], [0.7, "rotate(2deg)"], [1, "none"]],
+  thinking: [[0, "none"], [0.5, "rotate(-5deg) translateX(-2px)"], [1, "none"]],
+  worried: [[0, "none"], [0.4, "scale(.95) translateY(4px)"], [1, "none"]],
+  shocked: [[0, "none"], [0.2, "translateY(-10px) scale(1.05)"], [0.4, "translateX(-6px) rotate(-4deg)"], [0.6, "translateX(6px) rotate(4deg)"], [0.8, "translateX(-2px)"], [1, "none"]],
+};
+const reducedMotion = () => document.documentElement.dataset.motion === "reduced" ||
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
+function animate(element, keyframes, options) {
+  if (!reducedMotion()) element.animate?.(keyframes, options);
+}
+function buildCommentary(source) {
+  const root = document.createElement("section");
+  root.className = "commentary";
+  root.setAttribute("aria-live", "polite");
+  const stage = document.createElement("div");
+  stage.className = "cm-stage";
+  const figure = document.createElement("div");
+  figure.className = "cm-figure";
+  stage.append(figure);
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "cm-more";
+  more.hidden = true;
+  const feed = document.createElement("ol");
+  feed.className = "cm-feed";
+  const stats = describe("", "cm-stats");
+  stage.append(stats);
+  const status = describe("", "cm-status");
+  root.append(stage, more, feed, status);
+  const state = { source, root, figure, feed, status, stats, more, mood: "", coach: "", keys: new Map(), expanded: false };
+  more.onclick = () => { state.expanded = !state.expanded; layoutFeed(state); };
+  // Gentle idle breathing on the stage only (the figure keeps its own motion).
+  if (!reducedMotion())
+    stage.animate?.([{ transform: "none" }, { transform: "translateY(-2px)" }, { transform: "none" }],
+      { duration: 4200, iterations: Infinity, easing: "ease-in-out" });
+  return state;
+}
+function setMood(state, mood) {
+  if (state.mood === mood && state.coach === coachId) return;
+  const first = !state.mood;
+  state.mood = mood;
+  state.coach = coachId;
+  const image = document.createElement("div");
+  image.className = "cm-face";
+  image.innerHTML = coachSvg(coachId, mood);
+  const old = [...state.figure.children];
+  state.figure.append(image);
+  state.root.dataset.mood = mood;
+  if (first || reducedMotion()) old.forEach((node) => node.remove());
+  else {
+    image.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
+    setTimeout(() => old.forEach((node) => node.remove()), 230);
+    const frames = MOTION[mood];
+    if (frames) animate(state.figure, frames.map(([offset, transform]) => ({ offset, transform })),
+      { duration: mood === "thinking" ? 1400 : 700, easing: "cubic-bezier(.3,.8,.3,1)" });
   }
-  const { grade, move } = mineEntry;
-  const key = String(view.source) + ":" + move.color;
-  const log = accuracyLogs.get(key) || new Map();
-  log.set(move.after, grade.loss);
-  accuracyLogs.set(key, log);
-  const mood = MOOD_BY_GRADE[grade.key] || "happy";
-  avatar.innerHTML = coachSvg(coachId, mood);
-  card.dataset.mood = mood;
-  card.dataset.grade = grade.key;
-  card.dataset.key = move.after;
+}
+function commentItem(entry, coach) {
+  const { grade, move, mine } = entry;
+  const item = document.createElement("li");
+  item.className = "cm-item";
+  item.dataset.tone = grade.tone;
+  if (!mine) item.dataset.opponent = "";
+  const head = document.createElement("div");
+  head.className = "cm-head";
+  const who = describe(mine ? "You" : "Opponent", "cm-who", "span");
   const badge = document.createElement("span");
   badge.className = "grade-badge";
   badge.dataset.tone = grade.tone;
   badge.append(describe(grade.symbol, "grade-symbol", "span"), describe(move.san + " · " + grade.label, "", "span"));
-  if (view.gradeCelebrate && view.gradeMove?.after === move.after) badge.dataset.celebrate = "";
-  const stats = document.createElement("div");
-  stats.className = "coach-stats";
-  stats.append(badge);
-  if (view.streak >= 2) stats.append(describe(view.streak + " in a row", "streak", "span"));
-  const losses = [...log.values()];
-  const accuracy = losses.reduce((sum, loss) => sum + moveAccuracy(loss), 0) / losses.length;
-  stats.append(describe("Accuracy " + Math.round(accuracy) + "%", "coach-accuracy", "span"));
-  bubble.append(describe(reactionLine(grade.key, move.after + move.san, coachId, move.san), "coach-say"), stats);
-  // The opponent's reply, if it came after the user's move.
-  if (oppEntry && oppEntry.move.before === move.after)
-    bubble.append(describe(opponentLine(oppEntry.grade.key, oppEntry.move.san), "coach-hint"));
-  else if (!yourTurn) bubble.append(describe("Waiting for your opponent…", "coach-hint"));
-  card.append(avatar, bubble);
-  // Redraws (engine progress, grading) must not replay the entrance animation.
-  const signature = (card.dataset.key || "idle") + "|" + bubble.textContent;
-  if (signature === lastCardSignature) card.dataset.static = "";
-  lastCardSignature = signature;
-  return card;
+  head.append(who, badge);
+  const line = mine
+    ? reactionLine(grade.key, move.after + move.san, coach, move.san)
+    : opponentLine(grade.key, move.san);
+  item.append(head, describe(line, "cm-say"));
+  return item;
+}
+const VISIBLE = 3;
+function layoutFeed(state) {
+  const items = [...state.feed.children];
+  const hidden = state.expanded ? 0 : Math.max(0, items.length - VISIBLE);
+  items.forEach((node, index) => { node.hidden = index < hidden; });
+  state.feed.toggleAttribute("data-faded", hidden > 0);
+  const earlier = Math.max(0, items.length - VISIBLE);
+  state.more.hidden = earlier === 0;
+  const label = state.expanded ? "Show fewer" : "Show " + earlier + " earlier " + (earlier === 1 ? "move" : "moves");
+  if (state.more.textContent !== label) state.more.textContent = label;
+}
+function reactionCard(view) {
+  if (!commentary || commentary.source !== view.source) commentary = buildCommentary(view.source);
+  const state = commentary;
+  const history = view.gradeHistory || [];
+  const mineLatest = [...history].reverse().find((entry) => entry.mine);
+  setMood(state, mineLatest ? MOOD_BY_GRADE[mineLatest.grade.key] || "happy" : "idle");
+  // Drop comments for moves no longer on the board (takebacks, new game).
+  const live = new Set(history.map((entry) => entry.move.after));
+  for (const [key, node] of state.keys) if (!live.has(key)) { node.remove(); state.keys.delete(key); }
+  for (const entry of history) {
+    const key = entry.move.after;
+    if (state.keys.has(key)) continue;
+    const item = commentItem(entry, coachId);
+    state.keys.set(key, item);
+    state.feed.append(item);
+    // A short pause makes the commentator feel like it watched the move.
+    animate(item, [{ opacity: 0, transform: "translateY(10px)" }, { opacity: 1, transform: "none" }],
+      { duration: 320, delay: entry.mine ? 350 : 550, easing: "cubic-bezier(.2,.8,.2,1)", fill: "backwards" });
+    if (entry.mine && entry.grade.key === "best" && document.documentElement.dataset.celebrate !== "off")
+      item.dataset.celebrate = "";
+  }
+  layoutFeed(state);
+  const mine = history.filter((entry) => entry.mine);
+  const statsText = mine.length
+    ? "Accuracy " + Math.round(mine.reduce((sum, entry) => sum + moveAccuracy(entry.grade.loss), 0) / mine.length) + "%" +
+      (view.streak >= 2 ? " · " + view.streak + " in a row" : "")
+    : "";
+  if (state.stats.textContent !== statsText) state.stats.textContent = statsText;
+  const yourTurn = !view.playerColor || view.playerColor === new Chess(view.fen).turn();
+  const text = !history.length ? (yourTurn ? "Play a move and I’ll react." : "Waiting for your opponent…")
+    : yourTurn ? "Your move." : "Waiting for your opponent…";
+  if (state.status.textContent !== text) state.status.textContent = text;
+  return state.root;
 }
 export function describe(text, cls, tag = "p") {
   const element = document.createElement(tag);
@@ -259,6 +331,9 @@ export function renderCompanion(container, board, view, actions = {}) {
   }
   if (!studio && isWebsite) container.prepend(viewToggle(view.reactionsOnly ? "reactions" : "moves"));
   container.append(header);
+  // The footer's Open Studio button is quieter in Commentator mode.
+  if (!studio && isWebsite) document.body.toggleAttribute("data-commentator", Boolean(view.reactionsOnly));
+  if (!studio && isWebsite && view.reactionsOnly) document.body.removeAttribute("data-why");
   if (isWebsite && view.reactionsOnly) {
     header.querySelector(".game-progress")?.remove();
     container.append(reactionCard(view));
@@ -292,13 +367,24 @@ export function renderCompanion(container, board, view, actions = {}) {
   const top = view.flipped ? "w" : "b";
   let mini = null;
   if (studio) {
+    // Click the board (its arrows) to play the next move of the line.
+    boardElement.classList.add("line-board");
+    boardElement.title = "Click to play the next move";
+    boardElement.addEventListener("click", () => { if (!next.disabled) step(1); });
+    previous.classList.add("line-step");
+    next.classList.add("line-step", "line-step-next");
     const frame = document.createElement("section");
     frame.className = "position-board";
     frame.append(player(top), boardElement, player(top === "w" ? "b" : "w"), legend, replay);
     container.append(frame);
   } else if (isWebsite) {
-    players.append(player("w"), player("b"));
+    // You are always on the left; without a known player, White is on the left.
+    const left = view.playerColor || (view.flipped ? "b" : "w");
+    players.append(player(left), player(left === "w" ? "b" : "w"));
     header.append(players);
+    // The last-move grade sits under the players it belongs to.
+    const progress = header.querySelector(".game-progress");
+    if (progress) header.append(progress);
     mini = document.createElement("div");
     mini.className = "board mini-board";
     mini.setAttribute("role", "img");
@@ -528,7 +614,10 @@ export function renderCompanion(container, board, view, actions = {}) {
     details.replaceChildren();
     // One compact link replaces the long explanation: Studio replays the line.
     const openStudio = document.getElementById("open");
-    if (!studio && selected && openStudio && view.coachVisible !== false) {
+    const hasWhy = Boolean(!studio && selected && openStudio && view.coachVisible !== false);
+    // The Why link is the way into Studio, so the footer button hides.
+    if (!studio && isWebsite) document.body.toggleAttribute("data-why", hasWhy);
+    if (hasWhy) {
       const why = action("", () => openStudio.click());
       why.className = "why-link";
       why.dataset.focusKey = "why";

@@ -76,7 +76,7 @@ try {
  await popup.screenshot({path:'website-popup.png'});
  const viewToggle=popup.getByRole('radiogroup',{name:'Panel mode'});
  await viewToggle.getByRole('radio',{name:'Commentator',exact:true}).click();
- await popup.locator('.coach-card').waitFor();
+ await popup.locator('.commentary').waitFor();
  assert.equal(await rows(popup).count(),0);
  await popup.getByRole('radiogroup',{name:'Panel mode'}).getByRole('radio',{name:'Coach',exact:true}).click();
  await rows(popup).first().waitFor();
@@ -137,7 +137,7 @@ try {
  await panel.screenshot({path:'website-panel.png'});
  const id=Number(new URL(popup.url()).searchParams.get('source'));
  const studioPage=context.waitForEvent('page');
- await panel.getByRole('button',{name:'Open Studio',exact:true}).click();
+ await panel.getByRole('button',{name:/^Why .+\?/}).click();
  const studio=await studioPage;
  await studio.setViewportSize({width:1280,height:970});
  await assertPressed(mode(studio,'Human'),true);

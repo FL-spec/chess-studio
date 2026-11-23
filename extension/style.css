@@ -2009,3 +2009,93 @@ body[data-mode="review"] #board-label { font-weight: 700; color: var(--ink); }
 .coach-card[data-static]:not([data-mood="idle"]) .coach-avatar,
 .coach-card[data-static] .coach-bubble { animation: none !important; }
 .coach-card[data-static][data-mood="idle"] .coach-avatar { animation: coach-idle 4.2s ease-in-out infinite !important; }
+/* Last-move grade sits under the player row in the panel. */
+.panel .game-progress { order: 5; flex-basis: 100%; }
+
+/* ---------- v1.7.2: Commentator feed ---------- */
+.commentary { display: grid; gap: 12px; padding: 4px 0 8px; }
+.cm-stage { display: grid; justify-items: center; gap: 6px; }
+.cm-figure { position: relative; width: 132px; height: 132px; transform-origin: 50% 100%; }
+.cm-figure::after {
+  content: ""; position: absolute; left: 22%; right: 22%; bottom: 2px; height: 10px; z-index: -1;
+  border-radius: 50%; background: radial-gradient(closest-side, #0b0b0f2e, transparent);
+}
+.cm-face { position: absolute; inset: 0; }
+.cm-face :is(img, svg) { width: 100%; height: 100%; display: block; }
+.cm-stats { margin: 0; min-height: 18px; font-size: 13px; font-weight: 700; color: var(--muted);
+  font-variant-numeric: tabular-nums; }
+.cm-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cm-item {
+  overflow: hidden; padding: 10px 12px; border-radius: 14px;
+  background: var(--paper); border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule);
+}
+.cm-item[data-tone="best"] { border-left-color: var(--best); }
+.cm-item[data-tone="good"] { border-left-color: var(--best); }
+.cm-item[data-tone="warn"] { border-left-color: #f5b301; }
+.cm-item[data-tone="bad"] { border-left-color: var(--bad); }
+.cm-item[data-opponent] { background: transparent; }
+.cm-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.cm-who { font-size: 13px; font-weight: 800; color: var(--muted); letter-spacing: .01em; }
+.cm-say { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.35; color: var(--ink); }
+.cm-status { margin: 0; text-align: center; font-size: 13px; color: var(--muted); min-height: 18px; }
+.cm-item[data-celebrate] .grade-badge { position: relative; }
+/* Commentator mode: Open Studio becomes a small, quiet link-button. */
+body[data-commentator] footer { justify-content: center; padding-top: 6px; padding-bottom: 8px; }
+body[data-commentator] footer #open {
+  width: auto; min-height: 32px; padding: 0 14px; font-size: 13px; font-weight: 700;
+  color: var(--muted); background: transparent; border: 1px solid var(--rule); box-shadow: none;
+}
+body[data-commentator] footer #open:hover:not(:disabled) { color: var(--ink); background: var(--rail); }
+body[data-commentator] footer { display: flex !important; justify-content: center !important; }
+body[data-commentator] footer #open { flex: 0 0 auto !important; width: auto !important; max-width: max-content; justify-self: center; }
+body[data-commentator] footer {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; margin: 0;
+  background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(6px);
+  border-top: 1px solid var(--rule); box-shadow: none;
+}
+body[data-commentator] main { padding-bottom: 64px; }
+/* Coach: the Why link opens Studio, so the footer button is not needed. */
+body[data-why] footer { display: none; }
+/* Commentator: earlier comments collapse behind a soft fade. */
+.cm-more {
+  justify-self: center; min-height: 30px; padding: 0 12px; border-radius: 999px;
+  font-size: 13px; font-weight: 700; color: var(--muted);
+  background: transparent; border: 1px solid var(--rule);
+}
+.cm-more:hover:not(:disabled) { color: var(--ink); background: var(--rail); }
+.cm-feed { position: relative; }
+.cm-feed[data-faded]::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -14px; height: 22px; pointer-events: none; z-index: 1;
+  background: linear-gradient(var(--paper), transparent);
+}
+.cm-item[hidden] { display: none; }
+
+/* ---------- v1.7.2: Studio line view ---------- */
+/* Back to game: the most visible action at the top. */
+.website .studio-back, .studio-back {
+  min-height: 44px; padding: 0 20px; border-radius: 999px; font-size: 15px; font-weight: 800;
+  color: var(--onprimary, #fff); background: var(--primary, #0b0b0f); border: 0;
+  box-shadow: 0 6px 18px #0b0b0f26;
+}
+.website .studio-back:hover:not(:disabled), .studio-back:hover:not(:disabled) {
+  color: var(--onprimary, #fff); background: var(--primary, #0b0b0f); transform: translateY(-1px);
+}
+.studio-back::before { content: "←" / ""; margin-right: 8px; font-weight: 800; }
+/* The line: big, clear step arrows around the move counter. */
+.studio-replay { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; }
+.studio-replay .line-step {
+  width: 52px; height: 52px; min-height: 52px; padding: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 800; line-height: 1; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--rule); box-shadow: 0 2px 8px #0b0b0f14;
+}
+.studio-replay .line-step-next { color: var(--onprimary, #fff); background: var(--primary, #0b0b0f); border-color: transparent; }
+.studio-replay .line-step:disabled { opacity: .35; box-shadow: none; }
+.studio-replay .line-step:hover:not(:disabled) { transform: translateY(-1px); }
+.studio-replay span { min-width: 120px; text-align: center; font-size: 15px; font-weight: 800;
+  font-variant-numeric: tabular-nums; color: var(--ink); }
+.line-board { cursor: pointer; }
+@media (prefers-reduced-motion: no-preference) {
+  .studio-replay .line-step, .studio-back { transition: transform .15s ease, opacity .15s ease; }
+}
