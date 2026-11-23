@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Chess Studio</title>
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="launcher.mjs"></script>
+  </head>
+  <body class="companion launcher">
+    <header class="brand">
+      <img src="pieces/bN.svg" alt="" />Chess Studio
+    </header>
+    <nav aria-label="Choose a view">
+      <button id="pop-out" type="button">Pop out</button>
+      <button id="pin" type="button">Pin analysis</button>
+      <button id="open" type="button">Open Studio</button>
+    </nav>
+    <p id="launch-status" role="status" hidden></p>
+  </body>
+</html>

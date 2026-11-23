@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Review · Chess Studio</title>
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="review.mjs"></script>
+  </head>
+  <body class="companion website">
+    <header class="brand">
+      <img src="pieces/bN.svg" alt="" />Chess Studio
+    </header>
+    <main class="continuation-review">
+      <header class="position-heading">
+        <h1 class="companion-heading">Review</h1>
+        <button class="primary studio-back" id="return-game" type="button">Back to game</button>
+      </header>
+      <section class="position-board" aria-label="Continuation board">
+        <div class="board" id="review-board" role="group" aria-label="Chess board"></div>
+        <div class="board-controls" id="review-controls">
+          <button id="previous-ply" aria-label="Previous move" disabled>‹</button>
+          <span id="review-step" role="status"></span>
+          <button id="next-ply" aria-label="Next move" disabled>›</button>
+        </div>
+      </section>
+      <section class="position-analysis" aria-label="Engine continuations">
+        <h2>Engine continuations</h2>
+        <div id="review-lines" class="companion-lines"></div>
+        <p id="review-status" class="muted" role="status"></p>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Chess Studio</title>
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="companion.mjs"></script>
+  </head>
+  <body class="companion panel">
+    <header class="brand">
+      <img src="pieces/bN.svg" alt="" /><span class="brand-name">Chess Studio</span>
+      <a class="icon-button settings-icon" href="index.html?view=settings" target="_blank" rel="noopener" aria-label="Settings" title="Settings"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="2.6"/><path d="M10 1.8v2.1M10 16.1v2.1M18.2 10h-2.1M3.9 10H1.8M15.8 4.2l-1.5 1.5M5.7 14.3l-1.5 1.5M15.8 15.8l-1.5-1.5M5.7 5.7 4.2 4.2"/><circle cx="10" cy="10" r="5.6"/></svg></a>
+    </header>
+    <main id="companion-content" aria-live="polite"></main>
+    <footer>
+      <button id="open" class="primary">Open Studio</button>
+    </footer>
+  </body>
+</html>

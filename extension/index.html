@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Chess Studio</title>
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="app.mjs"></script>
+  </head>
+  <body class="workspace">
+    <div class="layout">
+      <aside class="rail">
+        <a class="brand" href="index.html"
+          ><img src="pieces/bN.svg" alt="" />Chess Studio</a
+        >
+        <nav aria-label="Workspace">
+          <button data-mode="practice">Practice</button
+          ><button data-mode="review">Review</button
+          ><button data-mode="library">Library</button
+          ><button data-mode="settings">Settings</button>
+        </nav>
+        <a class="website-link" href="website.html">Website analysis</a
+        ><span class="rail-footer"><i></i> Runs locally</span>
+      </aside>
+      <main>
+        <header class="top">
+          <div>
+            <p class="eyebrow" id="eyebrow">Training board</p>
+            <h1 id="title">Practice</h1>
+          </div>
+          <div class="actions" id="top-actions">
+            <button id="flip">Flip board</button
+            ><button class="primary" id="new-game">New game</button>
+          </div>
+        </header>
+        <div id="game-view" class="game-view">
+          <section class="board-area" aria-label="Chessboard and game controls">
+            <div class="board-meta">
+              <span id="board-label">Training board</span
+              ><span id="status" role="status"></span>
+            </div>
+            <div
+              class="board"
+              id="board"
+              role="group"
+              aria-label="Chess board"
+            ></div>
+            <div class="board-controls">
+              <button id="first" aria-label="First position">|‹</button
+              ><button id="previous" aria-label="Previous move">‹</button
+              ><span id="counter"></span
+              ><button id="next" aria-label="Next move">›</button
+              ><button id="latest" aria-label="Latest position">›|</button>
+            </div>
+            <div class="actions board-actions">
+              <button id="retry-position" hidden>Try the position</button
+              ><button id="end-exercise" hidden>Return to review</button
+              ><button id="review-game">Review game</button
+              ><button id="resume" hidden>Resume opponent</button
+              ><button id="undo">Undo turn</button
+              ><button id="save">Save to Library</button
+              ><button id="export">Export PGN</button>
+            </div>
+          </section>
+          <aside class="inspector" aria-label="Analysis">
+            <div class="inspector-heading">
+              <h2>Analysis</h2>
+              <label class="switch"
+                ><input type="checkbox" id="show-analysis" /><span
+                  >Show lines</span
+                ></label
+              >
+            </div>
+            <div class="why" id="reason"></div>
+            <section id="candidates" aria-live="polite"></section>
+            <section id="replay" hidden></section>
+            <section class="move-section">
+              <h3>Moves</h3>
+              <button id="find-turning" hidden>Find turning points</button>
+              <div id="scan-results" role="status"></div>
+              <div id="moves" class="moves"></div>
+            </section>
+          </aside>
+        </div>
+        <section id="extra" hidden></section>
+        <p id="toast" role="status"></p>
+      </main>
+    </div>
+    <dialog id="dialog"></dialog>
+  </body>
+</html>

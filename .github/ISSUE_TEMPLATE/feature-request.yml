@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest something new.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: Describe the problem first, then the solution you have in mind, if any.
+    validations:
+      required: true
+  - type: textarea
+    id: site
+    attributes:
+      label: Site support
+      description: If this is about a chess site or page Chess Studio doesn't read yet, give the page type and how the board is shown.

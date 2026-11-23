@@ -1,0 +1,10 @@
+{
+  "games": 6800,
+  "positions": 37226,
+  "tests": 1711,
+  "correct": 487,
+  "top1": 0.2846288720046756,
+  "logLoss": 2.5703250798025676,
+  "uniformLogLoss": 3.272922906293768,
+  "openingPositions": 369
+}

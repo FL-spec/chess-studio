@@ -1,0 +1,42 @@
+name: Bug report
+description: Something breaks, shows the wrong position or behaves wrongly.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: Page
+      description: The site and page type, without game IDs or usernames.
+      placeholder: "chess.com/play/computer"
+  - type: input
+    id: fen
+    attributes:
+      label: Position (FEN)
+      description: If the problem is about a specific position.
+  - type: textarea
+    id: console
+    attributes:
+      label: Errors
+      description: Errors from the extension's console on chrome://extensions, if any. Remove anything private first.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Chess Studio version
+      description: Shown on chrome://extensions.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Chrome version and operating system
+      placeholder: "Chrome 142, macOS 26.1"
+    validations:
+      required: true
