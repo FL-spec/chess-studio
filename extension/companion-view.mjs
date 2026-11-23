@@ -59,6 +59,17 @@ function viewToggle(current) {
 // Commentator: one persistent element per game tab. Redraws reuse it, so
 // nothing flickers; only a changed expression and new comments animate.
 let commentary = null;
+let currentStep = null;
+let replayMemory = { key: "", cursor: 0 };
+if (globalThis.document && document.body?.classList.contains("website")) {
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
+    if (!currentStep) return;
+    event.preventDefault();
+    currentStep(event.key === "ArrowLeft" ? -1 : 1);
+  });
+}
 const MOTION = {
   delighted: [[0, "translateY(0) scale(1)"], [0.25, "translateY(0) scale(1.06, .92)"], [0.5, "translateY(-14px) scale(.97, 1.05)"], [0.75, "translateY(0) scale(1.03, .97)"], [1, "none"]],
   happy: [[0, "none"], [0.4, "rotate(-3deg) translateY(2px)"], [0.7, "rotate(2deg)"], [1, "none"]],
@@ -357,11 +368,9 @@ export function renderCompanion(container, board, view, actions = {}) {
   previous.setAttribute("aria-label", "Previous move");
   next.setAttribute("aria-label", "Next move");
   const counter = describe("", "", "span");
-  replay.addEventListener("keydown", event => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    step(event.key === "ArrowLeft" ? -1 : 1);
-  });
+  // Arrow keys step through the line from anywhere on the page, even after
+  // redraws replace the buttons (the handler always uses the latest view).
+  if (studio) currentStep = step;
   counter.setAttribute("role", "status");
   replay.append(previous, counter, next);
   const top = view.flipped ? "w" : "b";
@@ -602,7 +611,9 @@ export function renderCompanion(container, board, view, actions = {}) {
     const sequenceKey = JSON.stringify(selected?.pv || []);
     if (sequenceKey !== renderedSequence) {
       plies = selected?.sequence || [];
-      cursor = 0;
+      // Redraws keep the replay position for the same line and position.
+      const lineKey = view.fen + "|" + sequenceKey;
+      cursor = studio && replayMemory.key === lineKey ? Math.min(replayMemory.cursor, plies.length) : 0;
       renderedSequence = sequenceKey;
     }
     setPressed(single, !currentOptions().all);
@@ -716,6 +727,7 @@ export function renderCompanion(container, board, view, actions = {}) {
     const next = cursor + delta;
     if (next < 0 || next > plies.length) return;
     cursor = next;
+    replayMemory = { key: view.fen + "|" + renderedSequence, cursor };
     drawPosition(arrows());
   }
   async function paint(send) {

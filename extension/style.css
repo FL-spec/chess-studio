@@ -2099,3 +2099,17 @@ body[data-why] footer { display: none; }
 @media (prefers-reduced-motion: no-preference) {
   .studio-replay .line-step, .studio-back { transition: transform .15s ease, opacity .15s ease; }
 }
+/* Studio line view fits the window: the board sizes to the viewport height. */
+body.website { min-height: 100vh; }
+.website main, body.website > main { padding-top: 12px; padding-bottom: 12px; }
+.website .position-board { justify-items: center; }
+.website .position-board .board { width: min(100%, calc(100vh - 400px)); min-width: 260px; aspect-ratio: 1; }
+.website .position-board .board-player { width: min(100%, calc(100vh - 400px)); min-width: 260px; }
+.website .studio-replay { margin-top: 4px; }
+.website .studio-replay .line-step { width: 44px; height: 44px; min-height: 44px; font-size: 24px; }
+.website footer { padding-top: 8px; padding-bottom: 8px; }
+.website .board-arrow-legend { display: none; }
+.website .game-progress { display: none; }
+.website .brand { margin-bottom: 8px; }
+.website .position-heading, .website header.position-heading { padding-bottom: 10px; margin-bottom: 10px; row-gap: 8px; }
+body.website { padding-top: 16px !important; }

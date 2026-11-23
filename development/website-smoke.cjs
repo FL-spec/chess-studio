@@ -139,7 +139,7 @@ try {
  const studioPage=context.waitForEvent('page');
  await panel.getByRole('button',{name:/^Why .+\?/}).click();
  const studio=await studioPage;
- await studio.setViewportSize({width:1280,height:970});
+ await studio.setViewportSize({width:1280,height:800});
  await assertPressed(mode(studio,'Human'),true);
  await mode(studio,'Engine').click();
  await studio.locator('button.board-player[data-color=b]').click();
@@ -164,7 +164,7 @@ try {
  await studio.getByRole('button',{name:'Previous move'}).click();
  await studio.getByRole('button',{name:'Previous move'}).click();
  assert.equal(await studio.locator('.board [data-square=e4]').getAttribute('aria-label'),original);
- await studio.screenshot({path:'website-workspace.png',fullPage:true});
+ await studio.screenshot({path:'website-workspace.png'});
  await studio.getByRole('button',{name:'Back to game'}).click();
  await studio.waitForFunction(async source=>(await chrome.tabs.query({active:true,currentWindow:true}))[0]?.id===source,id);
  await popup.close();

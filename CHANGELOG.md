@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.7.3 · 2026-11-23
+
+### Fixed
+
+- Arrow keys step through a Studio line from anywhere on the page, without clicking first.
+- Stepping forward and back keeps working after the panel redraws (the replay position is kept).
+- Studio's line view fits the window: the board sizes to the screen height.
+
 ## 1.7.2 · 2026-11-23
 
 ### Changed
