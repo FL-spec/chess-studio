@@ -198,7 +198,9 @@ try {
  await training.locator('[data-chess-studio-mark] g[data-kind="premove"][data-move="e1d1"]').waitFor({state:'attached'});
  // Coach mode also shows the coach's reaction to the last move.
  await popup.locator('.coach-react .cm-face img').waitFor();
- assert.ok((await popup.locator('.coach-react-bubble').textContent()).trim().length>0);
+ // An ordinary move: the coach just says something like "Hm."
+ assert.match(await popup.locator('.coach-react-idle').textContent(),/^(Hm\.|Hmm…|Mm-hm\.|Ah\.|Hm, hm\.|Uh-huh\.|Okay\.|Mm\.)$/);
+ await popup.waitForTimeout(1200);
  await popup.screenshot({path:'website-premove.png',fullPage:true});
  await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR',['e4','d5']));
  await turn(popup,'White to move').waitFor();

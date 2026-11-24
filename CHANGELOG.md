@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.8.2 · 2026-11-24
+
+### Changed
+
+- When a move is not worth a comment, the Coach-mode coach says only a short sound such as "Hm.", "Mm-hm." or "Ah." instead of a sentence. The sound changes with each move, never repeats the previous one, and appears after a short pause. Screen readers skip it.
+
 ## 1.8.1 · 2026-11-24
 
 ### Added

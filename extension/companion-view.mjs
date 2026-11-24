@@ -241,6 +241,7 @@ function reactionCard(view) {
 // Coach mode: a compact reaction (animated portrait + comment) under the last
 // move's grade. It speaks only when a move matters; otherwise it stays idle.
 let coachStrip = null;
+const IDLE_SOUNDS = ["Hm.", "Hmm…", "Mm-hm.", "Ah.", "Hm, hm.", "Uh-huh.", "Okay.", "Mm."];
 function coachReaction(view) {
   const history = view.gradeHistory || [];
   if (!coachStrip || coachStrip.source !== view.source) {
@@ -259,7 +260,8 @@ function coachReaction(view) {
   const show = (entry) => {
     if (!entry) {
       state.root.removeAttribute("data-speaking");
-      state.bubble.replaceChildren(describe("I’ll speak up when a move matters.", "coach-react-idle"));
+      state.idleKey = null;
+      idle();
       return;
     }
     state.root.dataset.speaking = "";
@@ -270,8 +272,23 @@ function coachReaction(view) {
     animate(state.bubble, [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }],
       { duration: 280, easing: "cubic-bezier(.2,.8,.2,1)" });
   };
+  // Nothing worth a comment: a small "hm" that changes with each move.
+  const idle = () => {
+    const ply = history.length ? history[history.length - 1].ply : -1;
+    if (state.idleKey === ply) return;
+    state.idleKey = ply;
+    const options = IDLE_SOUNDS.filter((sound) => sound !== state.idleSound);
+    state.idleSound = ply < 0 ? "…" : options[(ply * 7 + 3) % options.length];
+    const sound = describe(state.idleSound, "coach-react-idle");
+    sound.setAttribute("aria-hidden", "true");
+    state.bubble.title = "Nothing worth a comment. The coach speaks up when a move matters.";
+    state.bubble.replaceChildren(sound);
+    animate(state.bubble, [{ opacity: 0 }, { opacity: 1 }], { duration: 240, delay: 500 + Math.random() * 400, fill: "backwards" });
+  };
   if (!state.bubble.firstChild) show(null);
   react(state, latestReaction(history), show);
+  if (!state.root.hasAttribute("data-speaking")) idle();
+  else state.bubble.removeAttribute("title");
   return state.root;
 }
 export function describe(text, cls, tag = "p") {

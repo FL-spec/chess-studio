@@ -2215,7 +2215,8 @@ button.info-button[aria-expanded="true"] { color: var(--blue); background: var(-
 }
 .coach-react-say { margin: 0; font-size: 13px; font-weight: 550; line-height: 1.45; color: var(--ink); }
 .coach-react-label { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 700; color: var(--muted); }
-.coach-react-idle { margin: 0; font-size: 13px; color: var(--muted); }
+.coach-react-idle { margin: 0; font-size: 14px; font-style: italic; color: var(--muted); }
+.coach-react:not([data-speaking]) .coach-react-bubble { flex: 0 1 auto; padding: 6px 12px; }
 .coach-react:not([data-speaking]) .coach-react-bubble { background: transparent; border-style: dashed; }
 .coach-react:not([data-speaking]) .coach-react-bubble::before { display: none; }
 .coach-react:not([data-speaking]) .coach-react-figure { opacity: .85; }
