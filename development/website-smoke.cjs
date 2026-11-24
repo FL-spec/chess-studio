@@ -96,8 +96,13 @@ try {
  await popup.locator('.cm-face img[src*=".gif"]').waitFor();
  const reaction=popup.locator('.cm-face img[src*=".gif?play="]');
  await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3P4/8/8/PPPP1PPP/RNBQKBNR',['e4','d5','exd5']));
- await reaction.waitFor();
+ // Every move is in the feed, but the coach only reacts when a move matters.
  await popup.locator('.cm-say').filter({hasText:/d5|pawn/i}).first().waitFor();
+ assert.equal(await reaction.count(),0);
+ await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3p4/4P1Q1/8/PPPP1PPP/RNB1KBNR',['e4','d5','Qg4']));
+ await popup.locator('.cm-face img[src*="-shocked.gif?play="]').waitFor();
+ // After a few seconds it returns to idle.
+ await popup.locator('.cm-face img[src*="-idle."]').waitFor({timeout:15000});
  await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR',['e4','d5']));
  await turn(popup,'White to move').waitFor();
  assert.equal(await rows(popup).count(),0);
@@ -191,6 +196,9 @@ try {
  await turn(popup,'Black to move').waitFor();
  await popup.locator('.premove-chip').filter({hasText:'Premove Kxd1'}).waitFor({timeout:30000});
  await training.locator('[data-chess-studio-mark] g[data-kind="premove"][data-move="e1d1"]').waitFor({state:'attached'});
+ // Coach mode also shows the coach's reaction to the last move.
+ await popup.locator('.coach-react .cm-face img').waitFor();
+ assert.ok((await popup.locator('.coach-react-bubble').textContent()).trim().length>0);
  await popup.screenshot({path:'website-premove.png',fullPage:true});
  await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR',['e4','d5']));
  await turn(popup,'White to move').waitFor();

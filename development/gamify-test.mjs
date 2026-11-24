@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { moveCommentary } from "../extension/analysis-evidence.mjs";
 import { Chess } from "../extension/vendor/chess.mjs";
+import { latestReaction, reactionMood } from "../extension/coaches.mjs";
 import { expectedScore, gradedTactic, gradeMove, gameAccuracy, streak, toCentipawns } from "../extension/gamify.mjs";
 assert.equal(expectedScore(0), 0.5);
 assert.ok(expectedScore(300) > 0.7 && expectedScore(-300) < 0.3);
@@ -52,4 +53,24 @@ const mateNote = moveCommentary(openingBlunder, gradeMove(0, -10000), { pv: ["g2
   { type: "mate", value: 1, pv: ["d8h4"] });
 assert.match(mateNote.reason, /Qh4#.*forced mate/);
 assert.match(mateNote.alternative, /^g3/);
-console.log("Gamify tests passed: grade thresholds, mate scores, sacrifices, material blunders, streaks and accuracy.");
+
+// Coach reactions: only moves that matter.
+const graded = (key, mine, ply) => ({ grade: { key }, mine, ply, move: { after: "fen" + ply } });
+assert.equal(reactionMood(graded("good", true, 1)), null);
+assert.equal(reactionMood(graded("best", true, 1), 1), null);
+assert.equal(reactionMood(graded("best", true, 1), 3), "happy");
+assert.equal(reactionMood(graded("excellent", true, 1), 5), "delighted");
+assert.equal(reactionMood(graded("brilliant", true, 1)), "delighted");
+assert.equal(reactionMood(graded("inaccuracy", true, 1)), "thinking");
+assert.equal(reactionMood(graded("mistake", true, 1)), "worried");
+assert.equal(reactionMood(graded("blunder", true, 1)), "shocked");
+assert.equal(reactionMood(graded("blunder", false, 1)), "delighted");
+assert.equal(reactionMood(graded("inaccuracy", false, 1)), null);
+// A blunder is remembered for one reply, then the coach goes quiet.
+assert.equal(latestReaction([graded("blunder", true, 1), graded("good", false, 2)])?.mood, "shocked");
+assert.equal(latestReaction([graded("blunder", true, 1), graded("good", false, 2), graded("good", true, 3)]), null);
+// Streak milestones count strong moves of yours only.
+const run = [1, 3, 5].map(ply => graded("best", true, ply)).flatMap(entry => [entry, graded("good", false, entry.ply + 1)]);
+assert.equal(latestReaction(run.slice(0, 5))?.mood, "happy");
+assert.equal(latestReaction(run.slice(0, 3)), null);
+console.log("Gamify tests passed: grade thresholds, mate scores, sacrifices, material blunders, streaks, accuracy and coach reactions.");

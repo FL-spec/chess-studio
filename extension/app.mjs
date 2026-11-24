@@ -866,7 +866,7 @@ function renderSettings() {
     "miniBoard", recommended([[true, "Show"], [false, "Hide"]], true), siteValues, saveSite("miniBoard"));
 
   const coaching = group("Coaching", "coaching");
-  control(coaching, "Panel mode", "Coach shows the best moves and arrows. Commentator hides suggestions and comments on every move you play.",
+  control(coaching, "Panel mode", "Coach shows the best moves and arrows and reacts to your moves. Commentator hides suggestions and comments on every move you play.",
     "view", recommended([["moves", "Coach"], ["reactions", "Commentator"]], "moves"), siteValues, saveSite("view"));
   {
     const row = document.createElement("div");

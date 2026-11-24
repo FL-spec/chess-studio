@@ -3,7 +3,7 @@ import { createLineOverlay } from "./board-mark.mjs";
 import { drawBoard, moveVisual } from "./chess-view.mjs";
 import { Chess } from "./vendor/chess.mjs";
 import { score, uci } from "./engine.mjs";
-import { MOOD_BY_GRADE, coachPortrait } from "./coaches.mjs";
+import { coachPortrait, latestReaction } from "./coaches.mjs";
 import { proLines, proMetric, proStyle } from "./pro-lines.mjs";
 import { moveAccuracy } from "./gamify.mjs";
 // Display preferences shared with the Studio settings (UI-only).
@@ -63,7 +63,7 @@ function viewToggle(current) {
   group.className = "segmented view-toggle";
   group.setAttribute("role", "radiogroup");
   group.setAttribute("aria-label", "Panel mode");
-  for (const [value, title, hint] of [["moves", "Coach", "Shows the best moves and arrows."],
+  for (const [value, title, hint] of [["moves", "Coach", "Shows the best moves and arrows, and reacts to your moves."],
     ["reactions", "Commentator", "Hides suggestions and comments on every move you play."]]) {
     const item = document.createElement("button");
     item.type = "button";
@@ -145,6 +145,31 @@ async function setMood(state, mood, moveKey) {
   state.figure.replaceChildren(face);
   state.root.dataset.mood = mood;
 }
+// Reactions: only moves that matter, after a short, slightly random pause
+// (as if the coach watched the move), held for a few seconds, then back to
+// idle. Each move reacts once; redraws never replay it.
+const REACTION_HOLD = 4200;
+function react(state, found, onShow) {
+  const key = found ? found.entry.move.after + "|" + found.mood : "";
+  if (state.reactKey === key) {
+    // Same move: only refresh the portrait if the motion preference changed.
+    if (state.mood) setMood(state, state.mood, state.moveKey);
+    return;
+  }
+  state.reactKey = key;
+  clearTimeout(state.reactTimer);
+  if (!found) {
+    setMood(state, "idle", "");
+    onShow?.(null);
+    return;
+  }
+  const delay = reducedMotion() ? 0 : 600 + Math.random() * 500;
+  state.reactTimer = setTimeout(() => {
+    setMood(state, found.mood, key);
+    onShow?.(found.entry);
+    state.reactTimer = setTimeout(() => setMood(state, "idle", key), REACTION_HOLD);
+  }, delay);
+}
 function commentItem(entry) {
   const { grade, move, mine, commentary } = entry;
   const item = document.createElement("li");
@@ -183,9 +208,8 @@ function reactionCard(view) {
   if (!commentary || commentary.source !== view.source) commentary = buildCommentary(view.source);
   const state = commentary;
   const history = view.gradeHistory || [];
-  const mineLatest = [...history].reverse().find((entry) => entry.mine);
-  const mood = mineLatest ? MOOD_BY_GRADE[mineLatest.grade.key] || "happy" : "idle";
-  setMood(state, mood, mineLatest?.move.after);
+  if (!state.reactKey && !state.mood) setMood(state, "idle", "");
+  react(state, latestReaction(history));
   // Drop comments for moves no longer on the board (takebacks, new game).
   const live = new Set(history.map((entry) => entry.move.after));
   for (const [key, node] of state.keys) if (!live.has(key)) { node.remove(); state.keys.delete(key); }
@@ -212,6 +236,42 @@ function reactionCard(view) {
   const text = !history.length ? (yourTurn ? "Play a move and I’ll react." : "Waiting for your opponent…")
     : yourTurn ? "Your move." : "Waiting for your opponent…";
   if (state.status.textContent !== text) state.status.textContent = text;
+  return state.root;
+}
+// Coach mode: a compact reaction (animated portrait + comment) under the last
+// move's grade. It speaks only when a move matters; otherwise it stays idle.
+let coachStrip = null;
+function coachReaction(view) {
+  const history = view.gradeHistory || [];
+  if (!coachStrip || coachStrip.source !== view.source) {
+    const root = document.createElement("section");
+    root.className = "coach-react";
+    root.setAttribute("aria-live", "polite");
+    const figure = document.createElement("div");
+    figure.className = "cm-figure coach-react-figure";
+    const bubble = document.createElement("div");
+    bubble.className = "coach-react-bubble";
+    root.append(figure, bubble);
+    coachStrip = { source: view.source, root, figure, bubble, mood: "", coach: "" };
+    setMood(coachStrip, "idle", "");
+  }
+  const state = coachStrip;
+  const show = (entry) => {
+    if (!entry) {
+      state.root.removeAttribute("data-speaking");
+      state.bubble.replaceChildren(describe("I’ll speak up when a move matters.", "coach-react-idle"));
+      return;
+    }
+    state.root.dataset.speaking = "";
+    const who = entry.mine ? "" : "Opponent · ";
+    state.bubble.replaceChildren(
+      describe(who + entry.move.san + " · " + entry.grade.label, "coach-react-label", "span"),
+      describe(entry.commentary?.reason || entry.grade.label, "coach-react-say"));
+    animate(state.bubble, [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }],
+      { duration: 280, easing: "cubic-bezier(.2,.8,.2,1)" });
+  };
+  if (!state.bubble.firstChild) show(null);
+  react(state, latestReaction(history), show);
   return state.root;
 }
 export function describe(text, cls, tag = "p") {
@@ -432,6 +492,8 @@ export function renderCompanion(container, board, view, actions = {}) {
     const progress = header.querySelector(".game-progress");
     if (progress) header.append(progress);
     if (premove) header.append(premove);
+    const reaction = view.bullet ? null : coachReaction(view);
+    if (reaction) header.append(reaction);
     mini = document.createElement("div");
     mini.className = "board mini-board";
     mini.setAttribute("role", "img");

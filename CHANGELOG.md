@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.8.1 · 2026-11-24
+
+### Added
+
+- Coach mode now shows the coach's reactions too: a small animated portrait with a comment, right under the last move's grade.
+
+### Changed
+
+- The coach reacts only to moves that matter. For your moves, that means brilliant moves, inaccuracies, mistakes, blunders, and best-move streaks of 3, 5, 8, 12 and 20. For your opponent's moves, it means their mistakes and blunders. Ordinary good moves get no reaction.
+- Reactions start after a short, slightly random pause (0.6–1.1 s), as if the coach watched the move. They hold for about 4 seconds, then the coach returns to idle. Each move reacts only once. In Coach mode the comment stays visible for the move and its reply.
+- Commentator still lists every move in its feed, but its portrait follows the same rules.
+
 ## 1.8.0 · 2026-11-24
 
 ### Added
