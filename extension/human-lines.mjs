@@ -3,11 +3,19 @@ import { rankHuman } from "./policy.mjs";
 import weights from "./weights.mjs";
 import openings from "./openings.mjs";
 
+function plyOf(board) {
+  const [, turn, , , , move] = board.fen().split(" ");
+  return (Number(move) - 1) * 2 + Number(turn === "b");
+}
+
+export function humanRanks(board, elo) {
+  return rankHuman(board, elo, plyOf(board), weights, openings);
+}
+
 export function humanLines(fen, elo, count = 3, ranked) {
   const board = new Chess(fen);
-  const fields = fen.split(" ");
-  const ply = (Number(fields[5]) - 1) * 2 + Number(fields[1] === "b");
-  return (ranked || rankHuman(board, elo, ply, weights, openings))
+  const ply = plyOf(board);
+  return (ranked || humanRanks(board, elo))
     .slice(0, count)
     .map(({ move, probability }) => {
       const line = [move.san];

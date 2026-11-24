@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { expectedScore, gradeMove, gameAccuracy, streak, toCentipawns } from "../extension/gamify.mjs";
+import { moveCommentary } from "../extension/analysis-evidence.mjs";
+import { Chess } from "../extension/vendor/chess.mjs";
+import { expectedScore, gradedTactic, gradeMove, gameAccuracy, streak, toCentipawns } from "../extension/gamify.mjs";
 assert.equal(expectedScore(0), 0.5);
 assert.ok(expectedScore(300) > 0.7 && expectedScore(-300) < 0.3);
 assert.equal(gradeMove(30, 10, true).key, "best");
@@ -17,4 +19,37 @@ assert.equal(streak(grades), 2);
 const accuracy = gameAccuracy(grades);
 assert.ok(accuracy > 50 && accuracy < 100, String(accuracy));
 assert.equal(gameAccuracy([]), null);
-console.log("Gamify tests passed: grade thresholds, mate scores, streaks and accuracy.");
+const offeredQueen = new Chess("3r3k/8/8/8/3Q4/8/8/K7 w - - 0 1").move("d4d7");
+const takingQueen = { pv: ["d8d7"] };
+const sacrifice = gradedTactic(gradeMove(20, 18, true), offeredQueen, takingQueen, 20, 18, true);
+assert.equal(sacrifice.key, "brilliant");
+assert.deepEqual(sacrifice.tactic, { piece: "queen", reply: "Rxd7" });
+assert.equal(streak([...grades, sacrifice]), 3);
+const droppedQueen = gradedTactic(gradeMove(200, -500), offeredQueen, takingQueen, 200, -500, false);
+assert.equal(droppedQueen.key, "blunder");
+assert.equal(droppedQueen.tactic.piece, "queen");
+const exchange = new Chess("2rq3k/8/8/8/3Q4/8/8/K7 w - - 0 1").move("d4d8");
+assert.equal(gradedTactic(gradeMove(20, 18, true), exchange, { pv: ["c8d8"] }, 20, 18, true).key, "best");
+assert.equal(gradedTactic(gradeMove(460, 440, true), offeredQueen, takingQueen, 460, 440, true).key, "best");
+assert.equal(gradedTactic(gradeMove(20, 18, true), offeredQueen, { pv: ["h8h7"] }, 20, 18, true).key, "best");
+const opening = new Chess().move("e4");
+const sound = moveCommentary(opening, gradeMove(30, 27, true), { pv: ["e2e4"] },
+  { pv: ["e7e5", "g1f3"] });
+assert.match(sound.reason, /e4|opens/i);
+assert.match(sound.example, /e5.*Nf3.*e5/);
+assert.equal(sound.alternative, undefined);
+const blunderNote = moveCommentary(offeredQueen, droppedQueen,
+  { pv: ["d4e5"] }, takingQueen);
+assert.match(blunderNote.reason, /queen.*Rxd7/);
+assert.match(blunderNote.alternative, /^Qe5/);
+const sacrificeNote = moveCommentary(offeredQueen, sacrifice, { pv: ["d4d7"] }, takingQueen);
+assert.match(sacrificeNote.reason, /offers the queen.*Rxd7/);
+assert.equal(sacrificeNote.alternative, undefined);
+const foolsMate = new Chess();
+for (const san of ["f3", "e5"]) foolsMate.move(san);
+const openingBlunder = foolsMate.move("g4");
+const mateNote = moveCommentary(openingBlunder, gradeMove(0, -10000), { pv: ["g2g3"] },
+  { type: "mate", value: 1, pv: ["d8h4"] });
+assert.match(mateNote.reason, /Qh4#.*forced mate/);
+assert.match(mateNote.alternative, /^g3/);
+console.log("Gamify tests passed: grade thresholds, mate scores, sacrifices, material blunders, streaks and accuracy.");

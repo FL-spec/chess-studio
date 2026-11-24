@@ -3,7 +3,8 @@ import { createLineOverlay } from "./board-mark.mjs";
 import { drawBoard, moveVisual } from "./chess-view.mjs";
 import { Chess } from "./vendor/chess.mjs";
 import { score, uci } from "./engine.mjs";
-import { MOOD_BY_GRADE, coachSvg, opponentLine, reactionLine } from "./coaches.mjs";
+import { MOOD_BY_GRADE, coachPortrait } from "./coaches.mjs";
+import { proLines, proMetric, proStyle } from "./pro-lines.mjs";
 import { moveAccuracy } from "./gamify.mjs";
 // Display preferences shared with the Studio settings (UI-only).
 function applyDisplayPreferences(prefs = {}) {
@@ -14,6 +15,30 @@ function applyDisplayPreferences(prefs = {}) {
 }
 let coachId = "nova";
 let miniOpen = true;
+let guideOpen = false;
+const percent = (value) => Math.round(value * 100) + "%";
+// What the current analysis mode does, with the numbers it uses.
+function modeGuide(view, lens) {
+  const ratings = view.modelRatings;
+  const mover = view.fen?.split(" ")[1] === "b" ? "b" : "w";
+  const self = ratings?.[mover];
+  const opponent = ratings?.[mover === "w" ? "b" : "w"];
+  const level = self ? "players rated about " + self + (opponent && opponent !== self ? " facing " + opponent : "") : "players at the chosen level";
+  const source = ratings?.source === "page" ? " Ratings come from the game page, converted to the model's Lichess scale." : "";
+  const outcome = lens === "pro" ? view.pro?.outcome : view.humanOutcome;
+  const chances = outcome ? " From here, the model expects these players to score about " + percent(outcome.score) +
+    " for the side to move (wins plus half the draws)." : "";
+  if (lens === "human")
+    return "Predicts the moves " + level + " actually play, from millions of online games. The percentage is how often they choose each move." + chances + source;
+  if (lens === "pro") {
+    const style = proStyle(view.proStyle);
+    return "Finds the strongest move a human would really play. Stockfish checks the moves " + level +
+      " choose most, keeps those that lose at most " + percent(style.tolerance) +
+      " of the winning chances, and ranks them by how natural they are (" + style.label + "). Each row shows the evaluation and how often players choose the move." + chances + source;
+  }
+  return "Stockfish 19 runs on your computer. It ranks moves by evaluation, in pawns for the player to move, at depth " +
+    (view.targetDepth || view.candidates?.[0]?.depth || "–") + ".";
+}
 if (globalThis.chrome?.storage?.local) {
   chrome.storage.local.get(["preferences", "websiteOptions"]).then(({ preferences, websiteOptions }) => {
     applyDisplayPreferences(preferences);
@@ -70,13 +95,7 @@ if (globalThis.document && document.body?.classList.contains("website")) {
     currentStep(event.key === "ArrowLeft" ? -1 : 1);
   });
 }
-const MOTION = {
-  delighted: [[0, "translateY(0) scale(1)"], [0.25, "translateY(0) scale(1.06, .92)"], [0.5, "translateY(-14px) scale(.97, 1.05)"], [0.75, "translateY(0) scale(1.03, .97)"], [1, "none"]],
-  happy: [[0, "none"], [0.4, "rotate(-3deg) translateY(2px)"], [0.7, "rotate(2deg)"], [1, "none"]],
-  thinking: [[0, "none"], [0.5, "rotate(-5deg) translateX(-2px)"], [1, "none"]],
-  worried: [[0, "none"], [0.4, "scale(.95) translateY(4px)"], [1, "none"]],
-  shocked: [[0, "none"], [0.2, "translateY(-10px) scale(1.05)"], [0.4, "translateX(-6px) rotate(-4deg)"], [0.6, "translateX(6px) rotate(4deg)"], [0.8, "translateX(-2px)"], [1, "none"]],
-};
+let portraitReplay = 0;
 const reducedMotion = () => document.documentElement.dataset.motion === "reduced" ||
   matchMedia("(prefers-reduced-motion: reduce)").matches;
 function animate(element, keyframes, options) {
@@ -103,34 +122,31 @@ function buildCommentary(source) {
   root.append(stage, more, feed, status);
   const state = { source, root, figure, feed, status, stats, more, mood: "", coach: "", keys: new Map(), expanded: false };
   more.onclick = () => { state.expanded = !state.expanded; layoutFeed(state); };
-  // Gentle idle breathing on the stage only (the figure keeps its own motion).
-  if (!reducedMotion())
-    stage.animate?.([{ transform: "none" }, { transform: "translateY(-2px)" }, { transform: "none" }],
-      { duration: 4200, iterations: Infinity, easing: "ease-in-out" });
   return state;
 }
-function setMood(state, mood) {
-  if (state.mood === mood && state.coach === coachId) return;
-  const first = !state.mood;
-  state.mood = mood;
-  state.coach = coachId;
-  const image = document.createElement("div");
-  image.className = "cm-face";
-  image.innerHTML = coachSvg(coachId, mood);
-  const old = [...state.figure.children];
-  state.figure.append(image);
-  state.root.dataset.mood = mood;
-  if (first || reducedMotion()) old.forEach((node) => node.remove());
-  else {
-    image.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
-    setTimeout(() => old.forEach((node) => node.remove()), 230);
-    const frames = MOTION[mood];
-    if (frames) animate(state.figure, frames.map(([offset, transform]) => ({ offset, transform })),
-      { duration: mood === "thinking" ? 1400 : 700, easing: "cubic-bezier(.3,.8,.3,1)" });
+async function setMood(state, mood, moveKey) {
+  const animated = !reducedMotion();
+  if (state.mood === mood && state.coach === coachId &&
+      state.moveKey === moveKey && state.animated === animated) return;
+  Object.assign(state, { mood, coach: coachId, moveKey, animated });
+
+  const face = document.createElement("div");
+  face.className = "cm-face";
+  const replay = animated && mood !== "idle" ? ++portraitReplay : 0;
+  face.innerHTML = coachPortrait(coachId, mood, { animated, replay });
+  state.pendingFace = face;
+  try {
+    await face.firstElementChild.decode();
+  } catch {
+    return;
   }
+  if (state.pendingFace !== face) return;
+
+  state.figure.replaceChildren(face);
+  state.root.dataset.mood = mood;
 }
-function commentItem(entry, coach) {
-  const { grade, move, mine } = entry;
+function commentItem(entry) {
+  const { grade, move, mine, commentary } = entry;
   const item = document.createElement("li");
   item.className = "cm-item";
   item.dataset.tone = grade.tone;
@@ -143,10 +159,13 @@ function commentItem(entry, coach) {
   badge.dataset.tone = grade.tone;
   badge.append(describe(grade.symbol, "grade-symbol", "span"), describe(move.san + " · " + grade.label, "", "span"));
   head.append(who, badge);
-  const line = mine
-    ? reactionLine(grade.key, move.after + move.san, coach, move.san)
-    : opponentLine(grade.key, move.san);
-  item.append(head, describe(line, "cm-say"));
+  item.append(head, describe(commentary.reason, "cm-say"));
+  if (commentary.example) item.append(describe(commentary.example, "cm-example"));
+  if (commentary.alternative) {
+    const suggestion = describe("", "cm-alternative");
+    suggestion.append(describe("Better move", "cm-alternative-label", "strong"), commentary.alternative);
+    item.append(suggestion);
+  }
   return item;
 }
 const VISIBLE = 3;
@@ -165,20 +184,21 @@ function reactionCard(view) {
   const state = commentary;
   const history = view.gradeHistory || [];
   const mineLatest = [...history].reverse().find((entry) => entry.mine);
-  setMood(state, mineLatest ? MOOD_BY_GRADE[mineLatest.grade.key] || "happy" : "idle");
+  const mood = mineLatest ? MOOD_BY_GRADE[mineLatest.grade.key] || "happy" : "idle";
+  setMood(state, mood, mineLatest?.move.after);
   // Drop comments for moves no longer on the board (takebacks, new game).
   const live = new Set(history.map((entry) => entry.move.after));
   for (const [key, node] of state.keys) if (!live.has(key)) { node.remove(); state.keys.delete(key); }
   for (const entry of history) {
     const key = entry.move.after;
     if (state.keys.has(key)) continue;
-    const item = commentItem(entry, coachId);
+    const item = commentItem(entry);
     state.keys.set(key, item);
     state.feed.append(item);
     // A short pause makes the commentator feel like it watched the move.
     animate(item, [{ opacity: 0, transform: "translateY(10px)" }, { opacity: 1, transform: "none" }],
       { duration: 320, delay: entry.mine ? 350 : 550, easing: "cubic-bezier(.2,.8,.2,1)", fill: "backwards" });
-    if (entry.mine && entry.grade.key === "best" && document.documentElement.dataset.celebrate !== "off")
+    if (entry.celebrate && document.documentElement.dataset.celebrate !== "off")
       item.dataset.celebrate = "";
   }
   layoutFeed(state);
@@ -204,9 +224,10 @@ export function evaluationMeter(board, leading) {
   const whiteScore = leading.value * (board.turn() === "w" ? 1 : -1);
   const outcomes = leading.wdl;
   const whiteWin = outcomes?.[board.turn() === "w" ? 0 : 2];
-  const percentage = outcomes
-    ? (whiteWin + outcomes[1] / 2) / 10
-    : leading.type === "mate" ? (whiteScore > 0 ? 100 : 0) : 100 / (1 + Math.exp(-whiteScore / 170));
+  // Encode pawn advantage directly. Engine self-play WDL saturates much earlier.
+  const percentage = leading.type === "mate"
+    ? (whiteScore > 0 ? 100 : 0)
+    : 50 + 49 * whiteScore / (Math.abs(whiteScore) + 300);
   const evaluation = document.createElement("div");
   evaluation.className = "eval";
   const meter = document.createElement("meter");
@@ -259,6 +280,20 @@ function gradeBadge(view) {
   badge.append(describe(grade.symbol, "grade-symbol", "span"), describe(who + san + " · " + grade.label, "", "span"));
   if (view.gradeCelebrate && view.myGrade && view.gradeMove?.after === view.myGrade.move.after) badge.dataset.celebrate = "";
   return badge;
+}
+// "Premove Nxd4 · safe against all 23 replies": shown while the opponent thinks.
+function premoveChip(view) {
+  const found = view.premove;
+  if (!found || view.reactionsOnly) return null;
+  const chip = document.createElement("div");
+  chip.className = "premove-chip";
+  chip.setAttribute("role", "status");
+  chip.title = "Stockfish checked this premove against every legal reply. It is the best move after " +
+    percent(found.coverage) + " of the likely replies and never loses more than " + percent(found.worstLoss || 0) +
+    " of the winning chances." + (found.cancelled ? " After " + found.cancelled + " other replies it is illegal, so the site cancels it." : "");
+  chip.append(describe("", "premove-icon", "span"), describe("Premove " + found.san, "premove-move", "strong"),
+    describe("Checked against all " + found.replies + " replies", "premove-detail", "span"));
+  return chip;
 }
 function action(text, handler) {
   const button = document.createElement("button");
@@ -335,12 +370,14 @@ export function renderCompanion(container, board, view, actions = {}) {
     }
     header.append(progress);
   }
+  const premove = premoveChip(view);
+  if (premove) header.append(premove);
   if (studio && actions.back) {
     const back = action("Back to game", actions.back);
     back.className = "studio-back";
     header.append(back);
   }
-  if (!studio && isWebsite) container.prepend(viewToggle(view.reactionsOnly ? "reactions" : "moves"));
+  if (!studio && isWebsite && !view.bullet) container.prepend(viewToggle(view.reactionsOnly ? "reactions" : "moves"));
   container.append(header);
   // The footer's Open Studio button is quieter in Commentator mode.
   if (!studio && isWebsite) document.body.toggleAttribute("data-commentator", Boolean(view.reactionsOnly));
@@ -394,6 +431,7 @@ export function renderCompanion(container, board, view, actions = {}) {
     // The last-move grade sits under the players it belongs to.
     const progress = header.querySelector(".game-progress");
     if (progress) header.append(progress);
+    if (premove) header.append(premove);
     mini = document.createElement("div");
     mini.className = "board mini-board";
     mini.setAttribute("role", "img");
@@ -462,6 +500,30 @@ export function renderCompanion(container, board, view, actions = {}) {
   controls.className = "move-controls";
   const engine = action("Engine", () => chooseMode("engine"));
   const human = action("Human", () => chooseMode("human"));
+  const pro = action("Pro", () => chooseMode("pro"));
+  engine.title = "Stockfish's strongest moves";
+  human.title = "The moves players at this level choose most";
+  pro.title = "The most natural move that Stockfish approves";
+  // Mode guide: an info icon at the end of the status line opens a short
+  // explanation of the current mode, with the numbers it uses.
+  const guideCard = describe("", "mode-guide", "p");
+  guideCard.id = "mode-guide";
+  const guideButton = action("", () => {
+    guideOpen = !guideOpen;
+    showGuide();
+  });
+  guideButton.className = "info-button";
+  guideButton.dataset.focusKey = "mode-guide";
+  guideButton.setAttribute("aria-controls", guideCard.id);
+  guideButton.innerHTML = '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="7.25"/><path d="M10 9v4.5"/><circle cx="10" cy="6.4" r=".4" fill="currentColor"/></svg>';
+  function showGuide() {
+    const names = { engine: "Engine", human: "Human", pro: "Pro" };
+    guideButton.setAttribute("aria-label", "How " + names[state.lens] + " works");
+    guideButton.title = guideButton.getAttribute("aria-label");
+    guideButton.setAttribute("aria-expanded", String(guideOpen));
+    guideCard.hidden = !guideOpen;
+    guideCard.textContent = modeGuide(view, state.lens);
+  }
   const single = action("Selected move", () => chooseArrowMode(false));
   const all = action("All moves", () => chooseArrowMode(true));
   const showOther = action("", () => {
@@ -477,7 +539,7 @@ export function renderCompanion(container, board, view, actions = {}) {
     return group;
   }
   if (view.show) {
-    controls.append(group("Analysis mode", engine, human));
+    controls.append(group("Analysis mode", engine, human, pro));
     controls.append(group("Board arrows", single, all));
     if (!view.followTurn) {
       showOther.classList.add("arrow-switch");
@@ -486,6 +548,10 @@ export function renderCompanion(container, board, view, actions = {}) {
   }
   analysis.append(controls);
   const info = describe("", "muted", "p");
+  const status = document.createElement("div");
+  status.className = "status-row";
+  status.append(info);
+  if (view.show) status.append(guideButton);
   const list = document.createElement("div");
   list.className = "companion-lines";
   const details = document.createElement("div");
@@ -494,7 +560,10 @@ export function renderCompanion(container, board, view, actions = {}) {
   depthBar.className = "depth-bar";
   depthBar.setAttribute("aria-hidden", "true");
   depthBar.hidden = true;
-  analysis.append(info, depthBar, list, details);
+  const trapNote = describe("", "trap-note", "p");
+  trapNote.hidden = true;
+  analysis.append(status, guideCard, depthBar, list, trapNote, details);
+  showGuide();
 
   let choices = [];
   let plies = [];
@@ -513,7 +582,10 @@ export function renderCompanion(container, board, view, actions = {}) {
   function roots() {
     return state.lens === "human"
       ? (view.human || []).map(item => ({ pv: item.line, metric: Math.round(item.probability * 100) + "%" }))
-      : view.candidates.map(item => ({ pv: item.pv, metric: score(item) }));
+      : state.lens === "pro"
+        ? (view.pro?.lines || view.candidates).slice(0, Math.max(view.candidates.length, 1))
+          .map(item => ({ pv: item.pv, metric: view.pro ? proMetric(item) : score(item) }))
+        : view.candidates.map(item => ({ pv: item.pv, metric: score(item) }));
   }
   function selectedRoot() {
     const moves = roots();
@@ -527,6 +599,7 @@ export function renderCompanion(container, board, view, actions = {}) {
     if (state.lens === lens) return;
     state.lens = lens;
     view.selectedReply = null;
+    showGuide();
     paint(true);
   }
   function chooseSide(reply) {
@@ -575,7 +648,7 @@ export function renderCompanion(container, board, view, actions = {}) {
       list.append(button);
     }
     if (choices.length) stable.rows = choices.length;
-    const searching = view.show && state.lens === "engine" && (view.pending || view.searching);
+    const searching = view.show && state.lens !== "human" && (view.pending || view.searching);
     for (let index = choices.length; searching && index < stable.rows; index += 1) {
       const skeleton = document.createElement("div");
       skeleton.className = "move-row-skeleton";
@@ -650,6 +723,7 @@ export function renderCompanion(container, board, view, actions = {}) {
           move: line.showMove ? line.move : "",
           reply: line.showReply ? line.reply : "",
         }));
+    if (!cursor && view.premove) active.push({ premove: view.premove.move });
     const overlay = createLineOverlay(document, active, view.flipped);
     overlay.classList.add("board-arrows");
     boardElement.append(overlay);
@@ -659,6 +733,8 @@ export function renderCompanion(container, board, view, actions = {}) {
       legend.append(describe("Move", "legend-candidate", "span"));
     if (!cursor && active.some(line => line.reply))
       legend.append(describe("Reply", "legend-reply", "span"));
+    if (!cursor && view.premove)
+      legend.append(describe("Premove", "legend-premove", "span"));
     previous.disabled = cursor === 0;
     next.disabled = cursor >= plies.length;
     counter.textContent = cursor
@@ -733,8 +809,10 @@ export function renderCompanion(container, board, view, actions = {}) {
   async function paint(send) {
     const version = ++selectionRevision;
     if (state.lens === "human") actions.loadHuman?.();
+    if (state.lens === "pro") view.loadPro?.();
     setPressed(engine, state.lens === "engine");
     setPressed(human, state.lens === "human");
+    setPressed(pro, state.lens === "pro");
     for (const player of container.querySelectorAll("button.board-player"))
       setPressed(player, player.dataset.color === (view.replyFocus ? other : turn));
     list.classList.toggle("reply-choices", Boolean(view.replyFocus));
@@ -744,16 +822,27 @@ export function renderCompanion(container, board, view, actions = {}) {
       : view.replyFocus ? "Include setup move" : "Include replies";
     let rows = view.show ? roots() : [];
     info.textContent = !view.show ? "Turn on Show lines or Live analysis to see moves."
-      : state.lens === "engine" && view.pending ? "Calculating with Stockfish…"
-      : state.lens === "engine" && view.error ? view.error
+      : state.lens !== "human" && view.pending ? "Calculating with Stockfish…"
+      : state.lens !== "human" && view.error ? view.error
       : state.lens === "human" ? (view.humanPending ? "Calculating with Maia-3…" : (view.humanModel || "Local model") + " · Likely moves")
+      : view.bullet ? "Bullet · One engine line"
+      : state.lens === "pro" ? (view.proPending || !view.pro ? "Checking human moves with Stockfish…"
+        : "Pro · " + proStyle(view.proStyle).label + " · " + (view.pro.model || "Human model"))
       : view.candidates.length ? "Stockfish 19 · Depth " + view.candidates[0].depth : "";
-    depthBar.hidden = !(state.lens === "engine" && view.searching && view.targetDepth);
+    depthBar.hidden = !(state.lens !== "human" && view.searching && view.targetDepth);
     if (!depthBar.hidden) {
       info.textContent = "Stockfish 19 · Depth " + (view.depth || 0) + " / " + view.targetDepth;
       depthBar.style.setProperty("--depth", Math.min(1, (view.depth || 0) / view.targetDepth));
     }
-    info.classList.toggle("analysis-progress", Boolean(state.lens === "human" ? view.humanPending : view.pending));
+    info.classList.toggle("analysis-progress", Boolean(state.lens === "human" ? view.humanPending : view.pending || (state.lens === "pro" && view.proPending)));
+    const trap = state.lens === "pro" && !view.replyFocus ? view.pro?.trap : null;
+    trapNote.hidden = !trap;
+    if (trap) {
+      const position = new Chess(view.fen);
+      const san = position.move(trap.pv[0]).san;
+      trapNote.textContent = "Common mistake: " + percent(trap.probability) + " of players here choose " + san +
+        ", which gives up " + percent(trap.loss) + " of the winning chances.";
+    }
     if (view.replyFocus && rows.length) {
       const setup = selectedRoot();
       const key = state.lens + ":" + setup.pv[0];

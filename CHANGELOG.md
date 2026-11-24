@@ -4,6 +4,48 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.8.0 · 2026-11-24
+
+### Added
+
+- Safe premoves. While your opponent thinks, a green dashed arrow and a panel chip show a premove that Stockfish checked against every legal reply. It must lose less than 4% expected score after each reply where it is legal; illegal premoves are cancelled by the site. **Obvious** (default) allows only recaptures and other captures, checks, promotions and answers to forced replies. **All safe** allows any checked move.
+- Human model settings: your level and opponent level (600–2600), player ratings read from Chess.com game pages (converted to the model's Lichess scale), and Pro style (Precise, Balanced, Natural).
+- Stockfish depth is a slider from 6 to 30 for the game page and 6 to 24 for practice.
+- Maia-3 now receives the opponent's rating separately, and its rating-aware outcome estimate appears in the Human and Pro mode guides.
+- Pro warns when the most common human move is a mistake.
+- `development/model-bench.cjs` benchmarks prediction accuracy by rating band, Pro trade-offs, outcome calibration and premove safety on real games.
+
+### Changed
+
+- Pro now plays the strongest move a human would really choose. It checks Maia-3's likely moves with Stockfish, even when they are outside the engine's top lines. It keeps moves within the style's tolerance and ranks them by `ln P(human) − loss / λ`. Rows show the evaluation and how often players choose the move.
+- The mode explanation is an info icon on the status line. It replaces the "i" segment in the mode switch, and it explains Engine and Human too.
+
+## 1.7.8 · 2026-11-23
+
+- Add Pro analysis, ranking near-equal Stockfish moves by human likelihood.
+- Add a reversible Bullet preset for one fast Stockfish line and early board arrows.
+
+## 1.7.7 · 2026-11-23
+
+- Give the streamer, grandmaster and analyst distinct silhouettes and outfits.
+- Explain graded moves with position-specific effects, engine replies and better alternatives.
+
+## 1.7.6 · 2026-11-23
+
+- Replace all five Commentator avatars with original illustrated characters and six animated GIF reactions each.
+- Celebrate engine-supported sacrifices and identify important pieces lost to a blunder.
+
+## 1.7.5 · 2026-11-23
+
+- Detect Chess.com games at direct `/game/<id>` URLs.
+
+## 1.7.4 · 2026-11-23
+
+- Restore automatic board arrows on supported Chess.com live-game pages.
+- Open Studio in move analysis even when the compact panel uses Commentator mode.
+- Map evaluation-bar fill to pawn advantage, preserving full endpoints for forced mates.
+- Update ONNX Runtime Web to 1.26.0 for its WebAssembly CPU detection fix.
+
 ## 1.7.3 · 2026-11-23
 
 ### Fixed

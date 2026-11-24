@@ -2,6 +2,8 @@
 // Expected score uses the Lichess win-chance curve; thresholds follow Lichess:
 // inaccuracy >= 0.10, mistake >= 0.20, blunder >= 0.30 drop in expected score.
 
+import { Chess } from "./vendor/chess.mjs";
+
 const MATE_CP = 10000;
 
 /** Centipawns from the mover's point of view for an engine line {type, value}. */
@@ -18,6 +20,7 @@ export function expectedScore(cp) {
 }
 
 export const GRADES = {
+  brilliant: { label: "Brilliant", symbol: "!!", tone: "best" },
   best: { label: "Best", symbol: "★", tone: "best" },
   excellent: { label: "Excellent", symbol: "!", tone: "good" },
   good: { label: "Good", symbol: "✓", tone: "good" },
@@ -44,6 +47,40 @@ export function gradeMove(beforeCp, afterCp, wasBest = false) {
   return { key, loss, ...GRADES[key] };
 }
 
+const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+const PIECE_NAMES = { n: "knight", b: "bishop", r: "rook", q: "queen" };
+
+function material(game, color) {
+  return game.board().flat().reduce((total, piece) => {
+    if (!piece) return total;
+    return total + PIECE_VALUES[piece.type] * (piece.color === color ? 1 : -1);
+  }, 0);
+}
+
+/** Refine strong sacrifices and blunders using the engine's actual reply. */
+export function gradedTactic(grade, move, reply, beforeCp, afterCp, wasBest) {
+  const sacrifice = grade.key === "best" && wasBest && grade.loss < 0.02 &&
+    beforeCp >= -80 && beforeCp < 350 && afterCp >= -55;
+  if ((!sacrifice && grade.key !== "blunder") || !reply?.pv?.length) return grade;
+
+  const variation = new Chess(move.after);
+  try {
+    const capture = variation.move(reply.pv[0]);
+    const piece = PIECE_NAMES[capture.captured];
+    if (!piece || (sacrifice && capture.to !== move.to)) return grade;
+    for (const followup of reply.pv.slice(1, 3)) variation.move(followup);
+    const materialLoss = material(new Chess(move.before), move.color) - material(variation, move.color);
+    // An ordinary exchange or recapture should not trigger a sacrifice or piece-drop reaction.
+    if (materialLoss < 2) return grade;
+    const tactic = { piece, reply: capture.san };
+    return sacrifice
+      ? { ...grade, ...GRADES.brilliant, key: "brilliant", tactic }
+      : { ...grade, tactic };
+  } catch {
+    return grade;
+  }
+}
+
 /** Lichess-style per-move accuracy (0..100) from an expected-score loss. */
 export function moveAccuracy(loss) {
   const value = 103.1668 * Math.exp(-0.04354 * loss * 100) - 3.1669;
@@ -60,7 +97,7 @@ export function gameAccuracy(grades) {
 export function streak(grades) {
   let count = 0;
   for (let index = grades.length - 1; index >= 0; index -= 1) {
-    if (grades[index].key !== "best" && grades[index].key !== "excellent") break;
+    if (!["brilliant", "best", "excellent"].includes(grades[index].key)) break;
     count += 1;
   }
   return count;

@@ -13,6 +13,8 @@ export function createArrowOverlay(document, move, reply, flipped) {
 
 const MOVE_COLOR = "#2375ed";
 const REPLY_COLOR = "#e89b26";
+// Safe premove: green, dashed, so it never reads as a move to play now.
+const PREMOVE_COLOR = "#1f9d55";
 const SHADOW = "#0b1220";
 
 export function createLineOverlay(document, lines, flipped) {
@@ -35,7 +37,7 @@ export function createLineOverlay(document, lines, flipped) {
   const at = ([x, y]) => fixed(x) + " " + fixed(y);
   // One arrow = subtle origin square, a soft under-shape for contrast on any board, then the arrow.
   function appendArrow(move, kind, rank) {
-    const color = kind === "reply" ? REPLY_COLOR : MOVE_COLOR;
+    const color = kind === "reply" ? REPLY_COLOR : kind === "premove" ? PREMOVE_COLOR : MOVE_COLOR;
     const [x1, y1] = center(move.slice(0, 2));
     const [x2, y2] = center(move.slice(2, 4));
     const length = Math.hypot(x2 - x1, y2 - y1) || 1;
@@ -79,8 +81,14 @@ export function createLineOverlay(document, lines, flipped) {
       opacity: "0.26", "stroke-linejoin": "round", "stroke-linecap": "round" });
     shadow.append(make("path", { d: body, "stroke-width": "0.07" }));
     arrow.append(shadow);
-    arrow.append(make("path", { d: body, fill: color, stroke: color, "stroke-width": "0.02",
-      "stroke-linejoin": "round" }));
+    if (kind === "premove") {
+      // Outlined and dashed with a light fill: planned, not played.
+      arrow.append(make("path", { d: body, fill: color, "fill-opacity": "0.35", stroke: color,
+        "stroke-width": "0.045", "stroke-dasharray": "0.12 0.08", "stroke-linejoin": "round" }));
+    } else {
+      arrow.append(make("path", { d: body, fill: color, stroke: color, "stroke-width": "0.02",
+        "stroke-linejoin": "round" }));
+    }
     overlay.append(arrow);
     if (animate)
       arrow.animate?.([
@@ -88,7 +96,7 @@ export function createLineOverlay(document, lines, flipped) {
         { transform: "none", opacity: 1 },
       ], { duration: 220, delay: rank * 40, easing: "cubic-bezier(.2,.7,.2,1)", fill: "backwards" });
   }
-  for (const kind of ["reply", "move"]) {
+  for (const kind of ["premove", "reply", "move"]) {
     const drawn = new Map();
     for (const line of lines) {
       const move = line[kind];

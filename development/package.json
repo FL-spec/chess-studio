@@ -2,11 +2,9 @@
   "name": "chess-studio-development",
   "private": true,
   "scripts": {
-    "test": "node gamify-test.mjs && node policy-test.mjs && node detector-test.mjs && node engine-test.cjs && node smoke.cjs && node website-smoke.cjs"
+    "test": "node gamify-test.mjs && node pro-test.mjs && node policy-test.mjs && node detector-test.mjs && node engine-test.cjs && node smoke.cjs && node website-smoke.cjs"
   },
   "devDependencies": {
-    "@dicebear/collection": "^9.4.2",
-    "@dicebear/core": "^9.4.3",
     "playwright-core": "1.65.1"
   }
 }

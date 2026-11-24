@@ -2,9 +2,13 @@ import { Chess } from "./vendor/chess.mjs";
 import { explain } from "./chess-view.mjs";
 import { uci } from "./engine.mjs";
 
-export function moveEvidence(fen, line) {
+function replay(fen, line, limit) {
   const game = new Chess(fen);
-  const moves = line.slice(0, 5).map((value) => game.move(value));
+  return line.slice(0, limit).map((value) => game.move(value));
+}
+
+export function moveEvidence(fen, line) {
+  const moves = replay(fen, line, 5);
   const [move, reply, continuation] = moves;
   return {
     san: move.san,
@@ -21,4 +25,53 @@ export function moveEvidence(fen, line) {
       return prefix + candidate.san;
     }).join(" "),
   };
+}
+
+
+// The played move and the alternative are separate lines from the same position.
+export function moveCommentary(move, grade, best, reply) {
+  const played = replay(move.before, [move.from + move.to + (move.promotion || "")], 1)[0];
+  const continuations = replay(played.after, reply?.pv || [], 3);
+  const [response, next, followup] = continuations;
+  const costly = grade.tone === "bad" || grade.tone === "warn";
+  let reason = explain(played);
+  let example;
+  let alternative;
+
+  if (grade.tactic && grade.key === "brilliant") {
+    const { piece, reply: capture } = grade.tactic;
+    reason = `${played.san} offers the ${piece}. The engine still approves the sacrifice after ${capture}.`;
+    if (next) example = moveDetail(next);
+  } else if (grade.tactic) {
+    const { piece, reply: capture } = grade.tactic;
+    reason = `${played.san} gives up the ${piece} to ${capture}.`;
+  } else if (costly && response) {
+    if (reply.type === "mate" && reply.value > 0) {
+      reason = `${response.san} starts a forced mate for the other side.`;
+    } else {
+      reason = `Allows ${response.san}. ${explain(response)}`;
+      if (followup && (followup.captured || followup.promotion || followup.san.endsWith("+"))) {
+        example = `${next.san} ${followup.san} · ${explain(followup)}`;
+      }
+    }
+  } else if (next && !isCoordinateOnly(explain(next))) {
+    example = `After ${response.san}, ${moveDetail(next)}`;
+  }
+
+  if (costly && best?.pv?.length && uci(played) !== best.pv[0]) {
+    const [preferred, answer, plan] = replay(played.before, best.pv, 3);
+    const effect = explain(preferred);
+    alternative = `${preferred.san} · ${effect}`;
+    if (isCoordinateOnly(effect) && plan)
+      alternative = `${preferred.san} ${answer.san} ${plan.san} · ${explain(plan)}`;
+  }
+  return { reason, example, alternative };
+}
+
+function isCoordinateOnly(text) {
+  return /^Moves the [a-z]+ to [a-h][1-8]\.$/.test(text);
+}
+
+function moveDetail(move) {
+  return `${move.san} · ${explain(move)}`;
 }

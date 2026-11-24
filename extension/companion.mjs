@@ -1,11 +1,15 @@
-import { websiteDefaults } from "./website-preferences.mjs";
+import { moveCommentary } from "./analysis-evidence.mjs";
+import { analysisLens, websiteSearchOptions } from "./website-preferences.mjs";
 import { Chess } from "./vendor/chess.mjs";
 import { describe, renderCompanion, renderScanning } from "./companion-view.mjs";
 import { analyze, score } from "./engine.mjs";
-import { maiaLines } from "./maia.mjs";
-import { humanLines } from "./human-lines.mjs";
+import { maiaLines, maiaPredict } from "./maia.mjs";
+import { humanLines, humanRanks } from "./human-lines.mjs";
+import { humanCandidates, proMetric, rankPro } from "./pro-lines.mjs";
+import { findSafePremove, uciOf } from "./premove.mjs";
+import { moverRatings, playerRatings } from "./ratings.mjs";
 import { supported } from "./detect.mjs";
-import { gradeMove, streak, toCentipawns } from "./gamify.mjs";
+import { gradedTactic, gradeMove, streak, toCentipawns } from "./gamify.mjs";
 const api = chrome.storage.local;
 const root = document.getElementById("companion-content");
 const isWebsiteWindow = document.body.classList.contains("website");
@@ -46,13 +50,14 @@ const stored = await api.get([
 ]);
 // The pop-out, pinned panel and Studio always follow the website board.
 const mode = "website";
-let websiteOptions = { ...websiteDefaults, ...stored.websiteOptions };
+let websiteOptions = websiteSearchOptions(stored.websiteOptions);
 const arrows = () => ({ all: false, other: true });
 const controls = {
-  lens: (params.get("lens") || websiteOptions.lens) === "human" ? "human" : "engine",
+  lens: analysisLens(params.get("lens") || websiteOptions.lens),
   modes: {
     engine: { turn: arrows(), reply: arrows() },
     human: { turn: arrows(), reply: arrows() },
+    pro: { turn: arrows(), reply: arrows() },
   },
 };
 const selectedPlayers = new Map();
@@ -86,6 +91,7 @@ function reset() {
 }
 function applyTheme() {
   document.documentElement.dataset.theme = prefs.theme;
+  document.documentElement.dataset.motion = prefs.motion || "full";
   document.documentElement.dataset.panelEvaluation = prefs.panelEvaluation === false ? "hide" : "show";
 }
 function disconnectArrows() {
@@ -109,6 +115,7 @@ function showSourceLines(view, lines) {
       type: "chess-studio-mark",
       fen: view.fen,
       lines,
+      premove: view.premove?.move,
     });
   } catch {
     disconnectArrows();
@@ -123,12 +130,19 @@ function draw(view) {
   const send = (lines, interaction) => {
     // Board arrows wait for the completed search so they never jump between
     // shallow candidates while the engine is still deepening.
-    if (view.automaticArrows) { if (!view.searching) showSourceLines(view, lines); }
+    // In Pro, they also wait for the human check so the arrow does not jump.
+    // A safe premove is time-critical, so it is drawn on its own meanwhile.
+    if (view.automaticArrows) {
+      const settled = (view.bullet || !view.searching) && !(controls.lens === "pro" && !view.pro && !view.replyFocus);
+      if (settled) showSourceLines(view, lines);
+      else if (view.premove) showSourceLines(view, []);
+    }
     else if (source && !view.generic && interaction) {
       chrome.tabs.sendMessage(source, {
         type: "chess-studio-mark",
         fen: view.fen,
         lines,
+        premove: view.premove?.move,
       }).catch(() => {});
     }
   };
@@ -142,16 +156,21 @@ function draw(view) {
     replies: source ? async (lens, setup) => {
       const board = new Chess(view.fen);
       board.move(setup);
+      if (board.isGameOver()) return [];
       const count = websiteOptions.lines;
+      const [self, opponent] = moverRatings(view.modelRatings, board.fen());
       if (lens === "human")
         return (websiteOptions.maia && !view.maiaError
-          ? await maiaLines(board.fen(), websiteOptions.elo, count, signal, websiteOptions.humanPlies || 2)
-          : humanLines(board.fen(), websiteOptions.elo, count)).map(item => ({
+          ? await maiaLines(board.fen(), self, count, signal, websiteOptions.humanPlies || 2, opponent)
+          : humanLines(board.fen(), self, count)).map(item => ({
           pv: [setup, ...item.line],
           metric: Math.round(item.probability * 100) + "%",
         }));
-      const lines = await analyze(board, { depth: websiteOptions.depth, count, signal });
-      return lines.map(line => ({ pv: [setup, ...line.pv], metric: score(line) }));
+      const options = websiteOptions;
+      const engineLines = await analyze(board, { depth: options.depth, count, signal });
+      if (lens !== "pro") return engineLines.map(line => ({ pv: [setup, ...line.pv], metric: score(line) }));
+      const pro = await computePro(board, options, signal, engineLines, view.modelRatings, view.maiaError);
+      return pro.lines.slice(0, count).map(line => ({ pv: [setup, ...line.pv], metric: proMetric(line) }));
     } : null,
     back: source ? async (event) => {
       const button = event.currentTarget;
@@ -172,6 +191,7 @@ const PROGRESS_MIN_DEPTH = 10;
 // Redraw partial engine lines at most every PROGRESS_MS, and only when the
 // candidate moves or their scores change, to keep the panel calm.
 function progressiveDraw(view, target) {
+  const minimum = view.bullet ? 6 : PROGRESS_MIN_DEPTH;
   let shown = "", pending, timer, last = 0, stopped = false;
   const flush = () => {
     timer = undefined;
@@ -191,7 +211,7 @@ function progressiveDraw(view, target) {
   };
   return {
     update(lines) {
-      if (stopped || !lines.length || lines[0].depth < Math.min(PROGRESS_MIN_DEPTH, target) || lines[0].depth >= target) return;
+      if (stopped || !lines.length || lines[0].depth < Math.min(minimum, target) || lines[0].depth >= target) return;
       pending = lines;
       if (!timer) timer = setTimeout(flush, Math.max(0, PROGRESS_MS - (performance.now() - last)));
     },
@@ -209,6 +229,40 @@ async function refreshStudio() {
   if (version !== revision || mode !== "studio") return;
   if (view) draw(view);
   else show("Open the practice board or load a game to see local analysis.");
+}
+
+// Human-model move probabilities for the player to move (Maia-3, or the
+// lightweight model when Maia is off or unavailable).
+async function predictHuman(board, options, signal, skipMaia, ratings) {
+  const [self, opponent] = moverRatings(ratings, board.fen());
+  if (options.maia && !skipMaia) {
+    try {
+      signal?.throwIfAborted();
+      const [prediction] = await maiaPredict([board], [self], [opponent]);
+      signal?.throwIfAborted();
+      return { ...prediction, model: "Maia-3" };
+    } catch {
+      signal?.throwIfAborted();
+    }
+  }
+  return { ranks: humanRanks(board, self), outcome: null, model: "Local model" };
+}
+
+// Pro: check the likely human moves with Stockfish at the same depth, then rank
+// everything by human likelihood within the style's evaluation tolerance.
+async function computePro(board, options, signal, engineLines, ratings, skipMaia) {
+  const human = await predictHuman(board, options, signal, skipMaia, ratings);
+  const known = new Set(engineLines.map(line => line.pv[0]));
+  const extra = [];
+  for (const { move } of humanCandidates(human.ranks)) {
+    const id = move.from + move.to + (move.promotion || "");
+    if (known.has(id)) continue;
+    signal?.throwIfAborted();
+    const [line] = await analyze(board, { depth: options.depth, count: 1, only: id, signal });
+    if (line?.pv[0] === id) extra.push({ ...line, searched: true });
+  }
+  const ranked = rankPro([...engineLines, ...extra], human.ranks, options.proStyle);
+  return { ...ranked, model: human.model, outcome: human.outcome };
 }
 
 const statuses = {
@@ -323,7 +377,7 @@ async function followWebsite() {
     const key = JSON.stringify([
       id, observation.fen, observation.last?.san,
       observation.flipped, observation.playerColor, observation.names,
-      observation.automaticArrows,
+      observation.automaticArrows, observation.ratings,
     ]);
     if (positionKey !== key) {
       positionKey = key;
@@ -339,32 +393,40 @@ async function followWebsite() {
       const selectedColor = selectedPlayer === "you" ? yourColor
         : selectedPlayer === "opponent" ? (yourColor === "w" ? "b" : yourColor === "b" ? "w" : null)
         : selectedPlayer;
+      const reactionsOnly = !isWebsiteWindow && websiteOptions.view === "reactions";
+      const modelRatings = playerRatings(websiteOptions, observation);
+      const [moverElo] = moverRatings(modelRatings, observation.fen);
+      let engineDone;
       const view = {
         followTurn: websiteOptions.arrowSide !== "selection",
         previewOnClick: websiteOptions.arrowSide === "preview",
-        replyFocus: Boolean(selectedColor && selectedColor !== board.turn()),
+        replyFocus: !websiteOptions.bullet && Boolean(selectedColor && selectedColor !== board.turn()),
         fen: observation.fen,
         last: observation.last,
         mode: "website",
+        bullet: websiteOptions.bullet,
         site: observation.site,
         analysis: Boolean(observation.analysis),
         source: id,
         generic: observation.generic,
-        reactionsOnly: websiteOptions.view === "reactions",
+        reactionsOnly,
         automaticArrows: websiteOptions.enabled && websiteOptions.arrows &&
-          websiteOptions.view !== "reactions" &&
+          !reactionsOnly &&
           observation.automaticArrows,
         flipped: observation.flipped,
         names: observation.names,
         playerColor: observation.playerColor,
+        ratings: observation.ratings,
+        modelRatings,
+        proStyle: websiteOptions.proStyle,
         show: websiteOptions.enabled,
         coachVisible: websiteOptions.coach === "always",
         candidates: [],
         human:
-          !websiteOptions.maia && websiteOptions.enabled && !board.isGameOver()
+          !websiteOptions.maia && (!websiteOptions.bullet || controls.lens === "human") && websiteOptions.enabled && !board.isGameOver()
             ? humanLines(
                 observation.fen,
-                websiteOptions.elo,
+                moverElo,
                 websiteOptions.lines,
               )
             : [],
@@ -372,7 +434,7 @@ async function followWebsite() {
         // gets the engine to itself and reactions arrive quickly.
         pending:
           websiteOptions.enabled &&
-          websiteOptions.view !== "reactions" &&
+          !reactionsOnly &&
           !board.isGameOver(),
       };
       if (opening) {
@@ -387,18 +449,49 @@ async function followWebsite() {
           options.other = params.get("other") !== "0";
         }
       }
+      if (view.pending) {
+        const options = websiteOptions;
+        const signal = controller.signal;
+        view.engineDone = new Promise((resolve, reject) => { engineDone = { resolve, reject }; });
+        view.engineDone.catch(() => {});
+        view.loadPro = () => {
+          if (view.proPending || view.pro) return;
+          view.proPending = true;
+          view.engineDone
+            .then(lines => computePro(board, options, signal, lines, view.modelRatings, view.maiaError))
+            .then(result => { view.pro = result; })
+            .catch(error => {
+              if (error.name !== "AbortError") view.pro = { lines: view.candidates, trap: null, failed: true };
+            })
+            .finally(() => {
+              view.proPending = false;
+              if (renderedSite === view && controls.lens === "pro") draw(view);
+            });
+        };
+        if (!options.maia && !view.human.length) view.loadHuman = () => {
+          view.human = humanLines(view.fen, moverElo, options.lines);
+        };
+      }
       if (websiteOptions.maia && view.pending) {
         view.loadHuman = () => {
           if (view.humanPending || view.human.length || view.maiaError) return;
           view.humanModel = "Maia-3";
           view.humanPending = true;
-          maiaLines(view.fen, websiteOptions.elo, websiteOptions.lines, controller.signal, websiteOptions.humanPlies || 2)
-            .then(lines => { view.human = lines; })
+          maiaLines(view.fen, moverElo, websiteOptions.lines, controller.signal, websiteOptions.humanPlies || 2,
+            moverRatings(modelRatings, view.fen)[1])
+            .then(lines => {
+              view.human = lines;
+              // The outcome estimate is optional: it redraws on its own and never fails the lines.
+              predictHuman(board, websiteOptions, controller.signal, false, modelRatings).then(prediction => {
+                view.humanOutcome = prediction.outcome;
+                if (renderedSite === view && controls.lens === "human") draw(view);
+              }, () => {});
+            })
             .catch(error => {
               if (error.name === "AbortError" || renderedSite !== view) return;
               view.maiaError = true;
               view.humanModel = "Local model · Maia unavailable";
-              view.human = humanLines(view.fen, websiteOptions.elo, websiteOptions.lines);
+              view.human = humanLines(view.fen, moverElo, websiteOptions.lines);
             }).finally(() => {
               if (renderedSite !== view) return;
               view.humanPending = false;
@@ -409,9 +502,10 @@ async function followWebsite() {
       attachGrades(view);
       renderedSite = view;
       draw(view);
-      gradeMoveOf(view);
-      // Compute both lenses after every move so switching Engine/Human is instant.
-      if (view.pending) view.loadHuman?.();
+      if (!view.bullet) gradeMoveOf(view);
+      if (controls.lens === "pro" && !view.replyFocus) view.loadPro?.();
+      if (view.pending && view.playerColor && board.turn() !== view.playerColor && !view.analysis)
+        findPremove(view, board, controller.signal);
       if (view.pending) {
         // Progressive results: show completed shallow iterations while the search
         // deepens. `view.searching` / `view.depth` / `view.targetDepth` describe it;
@@ -433,10 +527,12 @@ async function followWebsite() {
             view.searching = false;
             view.candidates = lines;
             view.depth = lines[0]?.depth ?? view.targetDepth;
+            engineDone.resolve(lines);
             draw(view);
           })
           .catch((error) => {
             progress.stop();
+            engineDone.reject(error);
             if (renderedSite !== view || error.name === "AbortError") return;
             view.pending = false;
             view.searching = false;
@@ -447,6 +543,28 @@ async function followWebsite() {
     }
   }
   timer = setTimeout(() => followWebsite().catch(showError), 450);
+}
+// Safe premove while the opponent thinks (see premove.mjs). The check uses a
+// shallower search than the panel so it is ready within the opponent's move.
+async function findPremove(view, board, signal) {
+  const options = websiteOptions;
+  const premoveMode = ["obvious", "safe", "off"].includes(options.premoves) ? options.premoves : "obvious";
+  if (premoveMode === "off") return;
+  view.premovePending = true;
+  try {
+    const human = await predictHuman(board, options, signal, view.maiaError, view.modelRatings);
+    const weights = new Map(human.ranks.map(row => [uciOf(row.move), row.probability]));
+    // Wide positions get a shallower check so it still finishes within the opponent's move.
+    const width = board.moves().length;
+    const depth = Math.max(8, Math.min(width > 30 ? 10 : 12, options.depth - 4));
+    view.premove = await findSafePremove(board, { analyze, depth, signal, weights, mode: premoveMode });
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    view.premove = null;
+  } finally {
+    view.premovePending = false;
+  }
+  if (renderedSite === view && !signal.aborted) draw(view);
 }
 // Move-quality grading. Each new move is graded on its own search, so a fast
 // reply from the opponent (e.g. a Chess.com bot) never cancels the reaction to
@@ -497,16 +615,19 @@ async function gradeMoveOf(view) {
   const bestMove = best.pv[0];
   const wasBest = bestMove.slice(0, 4) === last.from + last.to &&
     (bestMove[4] || "") === (last.promotion || "");
-  // After the move the side to move is the opponent: a finished game scores 0
-  // for checkmate delivered (mate for the mover), otherwise negate the reply.
+  // The reply is scored from the opponent’s perspective. Handle terminal positions directly.
   const afterGame = new Chess(last.after);
   const afterCp = afterGame.isCheckmate() ? 10000 : afterGame.isGameOver() ? 0 : -toCentipawns(reply);
-  const grade = gradeMove(toCentipawns(best), afterCp, wasBest);
+  const beforeCp = toCentipawns(best);
+  const grade = gradedTactic(gradeMove(beforeCp, afterCp, wasBest), last, reply, beforeCp, afterCp, wasBest);
   const live = renderedSite?.source === view.source ? renderedSite : null;
   const playerColor = live?.playerColor ?? view.playerColor;
   const mine = !playerColor || last.color === playerColor;
   const move = { san: last.san, color: last.color, before: last.before, after: last.after, from: last.from, to: last.to };
-  const entry = { grade, move, mine, ply: plyOf(last.after), celebrate: mine && grade.key === "best" };
+  const entry = {
+    grade, move, mine, ply: plyOf(last.after), celebrate: mine && grade.tone === "best",
+    commentary: moveCommentary(last, grade, best, reply),
+  };
   store.history = [...store.history.filter((item) => item.ply < entry.ply), entry]
     .sort((a, b) => a.ply - b.ply).slice(-12);
   if (mine) {
@@ -589,14 +710,17 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.preferences) {
+    const previousMotion = prefs.motion;
     prefs = { ...prefs, ...changes.preferences.newValue };
     applyTheme();
+    if (previousMotion !== prefs.motion && renderedSite) draw(renderedSite);
   }
-  if (changes.websiteOptions)
-    websiteOptions = { ...websiteDefaults, ...changes.websiteOptions.newValue };
   if (changes.websiteOptions) {
-    if (changes.websiteOptions.oldValue?.lens !== changes.websiteOptions.newValue?.lens)
-      controls.lens = websiteOptions.lens === "human" ? "human" : "engine";
+    const previousLens = websiteOptions.lens;
+    const previousBullet = websiteOptions.bullet;
+    websiteOptions = websiteSearchOptions(changes.websiteOptions.newValue);
+    if (previousLens !== websiteOptions.lens || previousBullet !== websiteOptions.bullet)
+      controls.lens = analysisLens(websiteOptions.lens);
     refresh();
     return;
   }
@@ -611,6 +735,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
 function showError() {
   show("Analysis could not be loaded. Reopen this view and retry.", "error");
 }
+matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", () => {
+  if (renderedSite && websiteOptions.view === "reactions" && !isWebsiteWindow) draw(renderedSite);
+});
 applyTheme();
 refresh();
 // Watchdog: restart the follow loop if it has not ticked for a while.

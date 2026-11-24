@@ -7,18 +7,26 @@ async function load(url) {
   if (!response) throw Error("Download Maia-3 in Settings.");
   return ort.InferenceSession.create(await response.arrayBuffer(), { executionProviders: ["wasm"] });
 }
+// `ratings` is the rating of the player to move; `opponents` the rating of the
+// other player (Maia-3 conditions on both). The value head is returned when the
+// model has one, so callers can read a rating-aware outcome estimate.
 onmessage = async ({ data }) => {
-  const { id, url, tokens, ratings } = data;
+  const { id, url, tokens, ratings, opponents } = data;
   try {
     session ??= load(url);
     const model = await session;
     const count = ratings.length;
-    const elo = new ort.Tensor("float32", ratings, [count]);
-    const feeds = { tokens: new ort.Tensor("float32", tokens, [count, 64, 12]), elo_self: elo, elo_oppo: elo };
-    const outputs = await model.run(feeds, ["logits_move"]);
+    const feeds = {
+      tokens: new ort.Tensor("float32", tokens, [count, 64, 12]),
+      elo_self: new ort.Tensor("float32", ratings, [count]),
+      elo_oppo: new ort.Tensor("float32", opponents || ratings, [count]),
+    };
+    const names = model.outputNames.includes("logits_value") ? ["logits_move", "logits_value"] : ["logits_move"];
+    const outputs = await model.run(feeds, names);
     const logits = outputs.logits_move.data.slice();
-    outputs.logits_move.dispose();
-    postMessage({ id, logits }, [logits.buffer]);
+    const value = outputs.logits_value ? outputs.logits_value.data.slice() : null;
+    for (const name of names) outputs[name].dispose();
+    postMessage({ id, logits, value }, value ? [logits.buffer, value.buffer] : [logits.buffer]);
   } catch (error) {
     session = undefined;
     postMessage({ id, error: String(error.message || error) });

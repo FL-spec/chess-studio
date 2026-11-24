@@ -51,3 +51,45 @@ Move explanations use observed board changes and legal continuations. The forced
 | Mean negative log likelihood, lower is better | 2.58 | 1.43 |
 
 The sample covers a slice of one day of online play. Human clocks, individual style, Chess.com rating calibration, and coaching effectiveness were not measured. To reproduce, pass the decompressed October 2026 PGN to `node development/model-eval.cjs` with `CHESS_TEST_CHROME` set. The same test verifies offline inference, forced mate, five legal engine continuations, and engine outcome totals.
+
+## Human-like coaching · 1.8.0
+
+**Pro.** Pro picks the strongest move a human would really play. Maia-3 lists the moves players at the target rating choose, until it covers 90% of the probability (at most five, each at least 3%). Stockfish searches any of these that are not in its own top lines, at the same depth. Pro keeps moves that lose at most the style's tolerance in expected score: Precise 2%, Balanced 4%, Natural 7%. It then ranks them by `ln P(human) − loss / λ` (λ = 0.01, 0.025, 0.05). This is the closed form of KL-regularised search ([Jacob et al., 2022](https://arxiv.org/abs/2112.07544)). Expected score uses Lichess's win-probability curve. When the most common human move is rejected and at least 20% of players choose it, the panel shows it as a common mistake.
+
+**Safe premoves.** One MultiPV search over all of the opponent's replies (up to 48) gives your best answer to each. The candidate must be best after the likely replies (at least 50% of Maia's opponent probability). After every reply where it is legal, it must lose less than 4% expected score, which is below Lichess's 5% inaccuracy threshold. Sites cancel premoves that are illegal, so those replies are safe. **Obvious** mode also requires a capture, check or promotion, or an opponent with three moves or fewer. Promotions are checked as queens, because sites auto-queen premoves.
+
+**Ratings.** Maia-3 takes separate ratings for the player to move and the opponent. On Chess.com, ratings beside the players are read from the page and converted to Maia's Lichess scale with `0.76 × rating + 635`. This line sits between published blitz and rapid fits; expect about ±70 points of error. Lichess Analysis has no ratings, so it uses the levels in Settings.
+
+### Benchmark
+
+Data: 1,200 positions from 1,546 rated Lichess arena games played on 2026-11-24 (rapid and blitz, ratings 600–2300). Up to three positions per game, from ply 8 on. Stockfish ran at depth 12 and Maia-3 is the browser model. Reproduce with `node development/model-bench.cjs <pgn> 1200 400`. Raw output: `development/model-bench-results.json`.
+
+| Mover rating | n | Maia-3 top-1 | Maia-3 top-3 | Engine top-1 | Pro Balanced top-1 | Pro loss | Maia pick loss | Human loss |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| < 1200 | 54 | 55.6% | 74.1% | 31.5% | 48.1% | 0.4% | 1.6% | 5.4% |
+| 1200–1499 | 208 | 44.7% | 75.5% | 33.2% | 46.2% | 0.3% | 2.8% | 5.4% |
+| 1500–1799 | 498 | 53.8% | 80.5% | 36.1% | 49.4% | 0.4% | 2.7% | 4.5% |
+| 1800–2099 | 380 | 60.3% | 87.1% | 37.9% | 53.7% | 0.3% | 2.4% | 3.8% |
+| 2100+ | 60 | 58.3% | 78.3% | 31.7% | 48.3% | 0.2% | 2.1% | 2.9% |
+| All | 1200 | 54.6% | 81.3% | 35.8% | 50.1% | 0.4% | 2.6% | 4.4% |
+
+"Loss" is the mean drop in expected score versus Stockfish's best move.
+
+| Pro style | Matches the human move | Mean loss |
+| --- | ---: | ---: |
+| Precise | 46.8% | 0.2% |
+| Balanced (default) | 50.1% | 0.4% |
+| Natural | 52.8% | 0.6% |
+
+- **The rating input matters.** Using the player's real rating instead of a fixed 2000 lowers log loss from 1.53 to 1.43. The gain is largest below 1200: 2.14 to 1.78.
+- **A separate opponent rating made no measurable difference:** 54.6% vs 54.8% top-1, log loss 1.428 vs 1.430. It stays, because it is free and matches how the model was trained.
+- **The lightweight model** matches 26.3% of moves, against 54.6% for Maia-3. It is an offline fallback only.
+- **Outcome calibration.** The Brier score (lower is better) for the game result from the player to move is 0.175 for Maia-3's value head and 0.206 for Stockfish through Lichess's curve.
+- **Premoves**, over 400 positions with the opponent to move:
+  - Obvious mode found a premove in 29 positions; All safe mode found one in 41.
+  - After the opponent's real move, 27 of the 29 would have been played and 2 cancelled.
+  - 22 of the 27 were Stockfish's best move at depth 16.
+  - Mean loss was 0.4%, worst 2.1%, and none was an inaccuracy or worse.
+  - The check took 280 ms on average (Apple silicon, headless Chrome).
+
+Limits: one day of Lichess arena games, with few positions below 1200 or above 2100. Chess.com rating conversion and clock pressure were not measured. The premove run used the code from before the promotion fix (promotions now checked as queens).

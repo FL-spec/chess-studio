@@ -1,21 +1,17 @@
 import { Chess } from "./vendor/chess.mjs";
 
-export function automaticArrows(url) {
-  if (!supported(url)) return false;
-  const { pathname } = new URL(url);
-  return /^\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/)?(?:play\/(?:computer|coach)|analysis)(?:\/|$)/i.test(pathname);
-}
-
 export function supported(url) {
   const { hostname, pathname } = new URL(url);
   if (hostname === "lichess.org") return /^\/analysis(?:\/|$)/.test(pathname);
   return (
     (hostname === "www.chess.com" || hostname === "chess.com") &&
-    /^\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/)?(?:play\/(?:computer|coach|online)|game\/live|live|analysis)(?:\/|$)/i.test(
+    /^\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/)?(?:play\/(?:computer|coach|online)|game\/(?:live|[0-9]+)|live|analysis)(?:\/|$)/i.test(
       pathname,
     )
   );
 }
+export const automaticArrows = supported;
+
 export function placement(board) {
   const squares = new Map();
   for (const element of board.querySelectorAll(".piece")) {

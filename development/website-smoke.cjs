@@ -76,7 +76,30 @@ try {
  await popup.screenshot({path:'website-popup.png'});
  const viewToggle=popup.getByRole('radiogroup',{name:'Panel mode'});
  await viewToggle.getByRole('radio',{name:'Commentator',exact:true}).click();
- await popup.locator('.commentary').waitFor();
+ await popup.locator('.commentary .cm-face img').waitFor();
+ const portraitCount=await popup.evaluate(async () => {
+   const {COACHES,coachPortrait}=await import(chrome.runtime.getURL('coaches.mjs'));
+   const moods=['idle','delighted','happy','thinking','worried','shocked'];
+   const portraits=COACHES.flatMap(coach=>moods.flatMap(mood=>[false,true].map(animated=>{
+     const element=document.createElement('div');
+     element.innerHTML=coachPortrait(coach.id,mood,{animated});
+     return element.firstElementChild;
+   })));
+   await Promise.all(portraits.map(portrait=>portrait.decode()));
+   return new Set(portraits.map(portrait=>portrait.src)).size;
+ });
+ assert.equal(portraitCount,60);
+ assert.match(await popup.locator('.cm-face img').getAttribute('src'),/\.gif(?:\?|$)/);
+ await popup.emulateMedia({reducedMotion:'reduce'});
+ await popup.locator('.cm-face img[src$=".webp"]').waitFor();
+ await popup.emulateMedia({reducedMotion:'no-preference'});
+ await popup.locator('.cm-face img[src*=".gif"]').waitFor();
+ const reaction=popup.locator('.cm-face img[src*=".gif?play="]');
+ await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3P4/8/8/PPPP1PPP/RNBQKBNR',['e4','d5','exd5']));
+ await reaction.waitFor();
+ await popup.locator('.cm-say').filter({hasText:/d5|pawn/i}).first().waitFor();
+ await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR',['e4','d5']));
+ await turn(popup,'White to move').waitFor();
  assert.equal(await rows(popup).count(),0);
  await popup.getByRole('radiogroup',{name:'Panel mode'}).getByRole('radio',{name:'Coach',exact:true}).click();
  await rows(popup).first().waitFor();
@@ -99,10 +122,46 @@ try {
  await popup.getByRole('link',{name:'Settings',exact:true}).click();
  const settings=await settingsPage;
  await settings.getByRole('heading',{name:'Settings',exact:true}).waitFor();
+ const commentator=settings.getByRole('radiogroup',{name:'Commentator'});
+ assert.equal(await commentator.getByRole('radio').count(),5);
+ const streamer=commentator.getByRole('radio',{name:'The Streamer, Kai',exact:true});
+ await streamer.click();
+ assert.equal(await streamer.getAttribute('aria-checked'),'true');
+ await popup.getByRole('radiogroup',{name:'Panel mode'}).getByRole('radio',{name:'Commentator',exact:true}).click();
+ await popup.locator('.cm-face img[src^="coaches/kai-"]').waitFor();
+ await popup.getByRole('radiogroup',{name:'Panel mode'}).getByRole('radio',{name:'Coach',exact:true}).click();
  assert.equal(await toggle(settings,'Automatic board arrows').getAttribute('aria-checked'),'true');
  assert.equal(await setting(settings,'Board arrows follow').inputValue(),'preview');
  const evaluation = popup.locator('.panel-evaluation meter');
  await evaluation.waitFor();
+ await mode(popup,'Pro').click();
+ await assertPressed(mode(popup,'Pro'),true);
+ const help=popup.getByRole('button',{name:'How Pro works',exact:true});
+ await help.click();
+ await popup.getByText(/strongest move a human would really play/).waitFor();
+ await help.click();
+ await popup.getByText(/strongest move a human would really play/).waitFor({state:'hidden'});
+ await popup.getByText(/^Pro · Balanced · /).waitFor();
+ await count(rows(popup),3);
+ // Pro rows show the evaluation and, for human moves, how often players choose them.
+ assert.match(await rows(popup).first().locator('.score').textContent(),/^[+-]?\d+\.\d\d( · \d+%)?$/);
+ // Settings: numeric depth slider and the human model section.
+ const depthSlider=settings.getByRole('slider',{name:'Stockfish depth',exact:true});
+ assert.equal(await depthSlider.inputValue(),'16');
+ assert.equal(await setting(settings,'Pro style').count(),0);
+ assert.equal(await settings.getByRole('radiogroup',{name:'Pro style'}).getByRole('radio').count(),3);
+ assert.equal(await settings.getByRole('radiogroup',{name:'Safe premoves'}).getByRole('radio',{name:'Obvious'}).getAttribute('aria-checked'),'true');
+ await popup.locator('button.board-player[data-color=b]').click();
+ await popup.getByText(/^Replies after/).waitFor();
+ await rows(popup).first().waitFor();
+ await popup.locator('button.board-player[data-color=w]').click();
+ await setSwitch(settings,'Bullet mode',true);
+ await popup.getByText('Bullet · One engine line',{exact:true}).waitFor();
+ await assertPressed(mode(popup,'Engine'),true);
+ await count(rows(popup),1);
+ await count(arrows,1);
+ await setSwitch(settings,'Bullet mode',false);
+ await count(rows(popup),3);
  const whiteScore = await popup.locator('.panel-evaluation .score').textContent();
  await setSwitch(settings,'Pop-out and pinned evaluation bar',false);
  await evaluation.waitFor({state:'hidden'});
@@ -126,6 +185,16 @@ try {
  await arrows.first().waitFor({state:'detached'});
  await setSwitch(settings,'Automatic board arrows',true);
  await arrows.first().waitFor({state:"attached"});
+ // Safe premove: Black (the opponent) will most likely trade queens, so the
+ // recapture Kxd1 is shown as a green dashed arrow and a chip in the panel.
+ await training.evaluate(()=>loadPosition('rnbqkbnr/ppp2ppp/8/4P3/2p1P3/8/PP3PPP/RNBQKBNR',['d4','d5','c4','dxc4','e4','e5','dxe5']));
+ await turn(popup,'Black to move').waitFor();
+ await popup.locator('.premove-chip').filter({hasText:'Premove Kxd1'}).waitFor({timeout:30000});
+ await training.locator('[data-chess-studio-mark] g[data-kind="premove"][data-move="e1d1"]').waitFor({state:'attached'});
+ await popup.screenshot({path:'website-premove.png',fullPage:true});
+ await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR',['e4','d5']));
+ await turn(popup,'White to move').waitFor();
+ assert.equal(await popup.locator('.premove-chip').count(),0);
  const panel=await context.newPage();
  await panel.setViewportSize({width:320,height:900});
  await panel.goto(base+'panel.html');
@@ -207,6 +276,16 @@ try {
  await studio.locator('[data-square=f3][aria-label="f3 white knight"]').waitFor();
  await training.evaluate(()=>loadPosition('rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR',['e4','e5']));
  await studio.locator('.position-board [data-square=e5][aria-label="e5 black pawn"]').waitFor();
+ await training.goto('https://www.chess.com/game/123');
+ await training.evaluate(() => {
+   const board = document.querySelector('wc-chess-board');
+   const afterE4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR';
+   loadPosition(afterE4, []);
+   board.game = { getFEN: () => afterE4 + ' b KQkq - 0 1' };
+ });
+ await turn(studio,'Black to move').waitFor();
+ await training.locator('[data-chess-studio-fen]').waitFor({state:'attached'});
+ await arrows.first().waitFor({state:'attached'});
  await training.goto('https://www.chess.com/puzzles');
  await studio.getByRole('heading',{name:'Looking for a game…'}).waitFor();
  assert.deepEqual(errors,[]);

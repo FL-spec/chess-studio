@@ -55,6 +55,19 @@
     const top = readName("top");
     const bottom = readName("bottom");
     const names = { w: flipped ? top : bottom, b: flipped ? bottom : top };
+    // Ratings beside the names, e.g. "(1543)"; absent for unrated or hidden ratings.
+    const readRating = (side) => {
+      const text = layout?.querySelector(
+        ".board-layout-" + side + " [class*='cc-user-rating'], .board-layout-" + side + " .user-tagline-rating",
+      )?.textContent || "";
+      const value = Number(text.replace(/[^\d]/g, ""));
+      return value >= 100 && value <= 3500 ? value : null;
+    };
+    const topRating = readRating("top");
+    const bottomRating = readRating("bottom");
+    const ratings = topRating || bottomRating
+      ? { w: flipped ? topRating : bottomRating, b: flipped ? bottomRating : topRating }
+      : undefined;
     const profile = document.querySelector('#sidebar-main-menu a[href*="/member/"]');
     const account = profile?.pathname.split("/").filter(Boolean).at(-1)?.toLowerCase();
     const match = account && Object.keys(names).find(
@@ -64,6 +77,7 @@
       .test(location.pathname);
     return {
       names,
+      ratings,
       playerColor: match || (practiceSite ? (flipped ? "b" : "w") : undefined),
     };
   }
@@ -150,12 +164,26 @@
       !Array.isArray(message.lines) ||
       message.lines.length > 5
     ) return false;
-    if (message.lines.length === 0) {
+    const legal = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
+    // A premove is your move after the opponent replies: it must be legal
+    // after at least one of their moves (the sites' own premove rule).
+    let premove = "";
+    if (typeof message.premove === "string" && legal.test(message.premove)) {
+      const game = new Chess(observed.fen);
+      const fits = game.moves({ verbose: true }).some((reply) => {
+        game.move(reply);
+        const ok = game.moves({ verbose: true }).some((move) => move.from + move.to === message.premove.slice(0, 4));
+        game.undo();
+        return ok;
+      });
+      if (fits) premove = message.premove;
+    }
+    if (message.lines.length === 0 && !premove) {
       if (marker?.owner === owner) clearMark();
       return true;
     }
-    const legal = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
     const visible = [];
+    if (premove) visible.push({ premove });
     try {
       for (const line of message.lines) {
         if (!legal.test(line?.move) || (line.reply && !legal.test(line.reply))) return false;

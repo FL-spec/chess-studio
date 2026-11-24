@@ -114,13 +114,21 @@ export function explain(move) {
     return "Advances to " + move.to + " and controls " +
       controlled.join(" and ") + (central ? ", contesting the center." : ".");
   }
-  return (
-    "Moves the " +
-    kind +
-    " to " +
-    move.to +
-    "."
+  const centralSquares = ["d4", "e4", "d5", "e5"].filter(square =>
+    after.attackers(square, move.color).includes(move.to) &&
+    !before.attackers(square, move.color).includes(move.from),
   );
+  if (centralSquares.length)
+    return "From " + move.to + ", the " + kind + " gains control of " + centralSquares.join(", ") + ".";
+  const defended = after.board().flat().find(target =>
+    target?.color === move.color && target.type !== "p" &&
+    after.attackers(target.square, move.color).includes(move.to) &&
+    !before.attackers(target.square, move.color).includes(move.from) &&
+    after.isAttacked(target.square, after.turn()),
+  );
+  if (defended)
+    return "Defends the attacked " + pieceNames[defended.type] + " on " + defended.square + ".";
+  return "Moves the " + kind + " to " + move.to + ".";
 }
 
 export function drawBoard(

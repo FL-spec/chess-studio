@@ -1667,15 +1667,34 @@ button.reset-settings { margin: 16px 0 32px 42px; background: transparent; }
 /* Coach picker in Settings */
 .setting-name { font-size: 15px; font-weight: 700; }
 .settings-group .coach-row { grid-template-columns: 1fr; }
-.coach-picker { display: flex; flex-wrap: wrap; gap: 10px; }
-.coach-picker button {
-  display: grid; justify-items: center; gap: 4px; width: 76px; padding: 6px 4px 8px;
-  border: 2px solid transparent; border-radius: 14px; background: transparent; font-size: 13px;
+.coach-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 10px;
 }
-.coach-picker button :is(svg, img) { width: 60px; height: 60px; border-radius: 50%; }
-.coach-picker button[aria-checked="true"] { border-color: var(--blue); background: var(--blue-bg); }
-.coach-picker button:hover:not(:disabled) { border-color: var(--rule); }
-.coach-picker button { width: 120px; align-content: start; }
+.coach-picker button {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 13px;
+}
+.coach-picker button img {
+  width: min(92px, 100%);
+  height: auto;
+  aspect-ratio: 1;
+}
+.coach-picker button[aria-checked="true"] {
+  border-color: var(--ink);
+  background: var(--rail);
+}
+.coach-picker button:hover:not(:disabled):not([aria-checked="true"]) { background: var(--rail); }
+
 .coach-name { font-weight: 800; font-size: 13px; }
 .coach-tagline { font-size: 12px; color: var(--muted); font-weight: 500; line-height: 1.3; }
 
@@ -1712,7 +1731,6 @@ button.primary:active:not(:disabled) { transform: scale(.98); box-shadow: none; 
 .position-source[data-analysis] { background: var(--rail); }
 .position-source[data-analysis] .live-dot { background: var(--muted); }
 .position-source[data-analysis] .live-label { color: var(--muted); }
-.coach-picker button[aria-checked="true"] { border-color: var(--ink); background: var(--rail); }
 .setting-switch[aria-checked="true"] { background: var(--live); }
 button.arrow-switch[aria-pressed="true"]::after {
   background: radial-gradient(circle 7px at 23px 50%, #fff 6.5px, transparent 7px), var(--live);
@@ -1943,7 +1961,6 @@ body[data-mode="review"] #board-label { font-weight: 700; color: var(--ink); }
   content: ""; position: absolute; left: 22%; right: 22%; bottom: 2px; height: 10px; z-index: -1;
   border-radius: 50%; background: radial-gradient(closest-side, #0b0b0f2e, transparent);
 }
-.coach-picker button :is(svg, img) { border-radius: 0; }
 @media (prefers-reduced-motion: no-preference) {
   /* Entrance: a short rise with a little overshoot, then the mood motion. */
   :root:not([data-motion="reduced"]) .coach-card .coach-avatar {
@@ -2015,7 +2032,7 @@ body[data-mode="review"] #board-label { font-weight: 700; color: var(--ink); }
 /* ---------- v1.7.2: Commentator feed ---------- */
 .commentary { display: grid; gap: 12px; padding: 4px 0 8px; }
 .cm-stage { display: grid; justify-items: center; gap: 6px; }
-.cm-figure { position: relative; width: 132px; height: 132px; transform-origin: 50% 100%; }
+.cm-figure { position: relative; width: 148px; height: 148px; transform-origin: 50% 100%; }
 .cm-figure::after {
   content: ""; position: absolute; left: 22%; right: 22%; bottom: 2px; height: 10px; z-index: -1;
   border-radius: 50%; background: radial-gradient(closest-side, #0b0b0f2e, transparent);
@@ -2024,20 +2041,22 @@ body[data-mode="review"] #board-label { font-weight: 700; color: var(--ink); }
 .cm-face :is(img, svg) { width: 100%; height: 100%; display: block; }
 .cm-stats { margin: 0; min-height: 18px; font-size: 13px; font-weight: 700; color: var(--muted);
   font-variant-numeric: tabular-nums; }
-.cm-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cm-feed { list-style: none; margin: 0; padding: 0; }
 .cm-item {
-  overflow: hidden; padding: 10px 12px; border-radius: 14px;
-  background: var(--paper); border: 1px solid var(--rule);
-  border-left: 3px solid var(--rule);
+  overflow: hidden;
+  padding: 12px 2px 14px;
+  border-top: 1px solid var(--rule);
 }
-.cm-item[data-tone="best"] { border-left-color: var(--best); }
-.cm-item[data-tone="good"] { border-left-color: var(--best); }
-.cm-item[data-tone="warn"] { border-left-color: #f5b301; }
-.cm-item[data-tone="bad"] { border-left-color: var(--bad); }
-.cm-item[data-opponent] { background: transparent; }
-.cm-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
-.cm-who { font-size: 13px; font-weight: 800; color: var(--muted); letter-spacing: .01em; }
-.cm-say { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.35; color: var(--ink); }
+.cm-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.cm-who { font-size: 13px; font-weight: 600; color: var(--muted); }
+.cm-say { margin: 0; font-size: 15px; font-weight: 550; line-height: 1.5; color: var(--ink); }
+.cm-example, .cm-alternative {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.cm-alternative-label { display: block; color: var(--ink); font-weight: 650; }
 .cm-status { margin: 0; text-align: center; font-size: 13px; color: var(--muted); min-height: 18px; }
 .cm-item[data-celebrate] .grade-badge { position: relative; }
 /* Commentator mode: Open Studio becomes a small, quiet link-button. */
@@ -2113,3 +2132,71 @@ body.website { min-height: 100vh; }
 .website .brand { margin-bottom: 8px; }
 .website .position-heading, .website header.position-heading { padding-bottom: 10px; margin-bottom: 10px; row-gap: 8px; }
 body.website { padding-top: 16px !important; }
+
+/* Status line with the mode guide icon; the guide opens as a quiet card. */
+.status-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.status-row > p { flex: 1 1 auto; min-width: 0; }
+.companion .status-row > p.muted { margin: 4px 0 6px; }
+button.info-button {
+  flex: 0 0 auto; display: inline-grid; place-items: center;
+  width: 28px; height: 28px; min-height: 28px; padding: 0; margin-right: -4px;
+  border: 0; border-radius: 999px; background: transparent; color: var(--muted);
+  transition: color .15s ease, background-color .15s ease;
+}
+button.info-button:hover:not(:disabled) { color: var(--ink); background: var(--rail); }
+button.info-button[aria-expanded="true"] { color: var(--blue); background: var(--accent-tint); }
+.mode-guide {
+  margin: 2px 0 10px; padding: 10px 12px; border-radius: 10px;
+  font-size: 13px; line-height: 1.5; color: var(--muted); background: var(--rail);
+}
+.mode-guide[hidden] { display: none; }
+/* Pro: the most common human move when it is a mistake. */
+.trap-note {
+  margin: 10px 0 2px; padding: 8px 10px 8px 12px; border-radius: 10px;
+  font-size: 13px; line-height: 1.45; color: var(--ink);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  box-shadow: inset 3px 0 var(--warn);
+}
+.trap-note[hidden] { display: none; }
+/* Safe premove chip: green, dashed, like its board arrow. */
+.premove-chip {
+  flex-basis: 100%; display: flex; align-items: center; gap: 8px; min-width: 0;
+  padding: 6px 12px 6px 8px; border-radius: 999px; font-size: 13px;
+  color: var(--best); background: color-mix(in srgb, var(--best) 12%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--best) 55%, transparent);
+}
+.premove-icon {
+  flex: 0 0 auto; width: 20px; height: 20px; border-radius: 999px; background: var(--best);
+  position: relative;
+}
+.premove-icon::after {
+  content: ""; position: absolute; inset: 5px; background: #fff;
+  clip-path: polygon(0 40%, 55% 40%, 55% 10%, 100% 50%, 55% 90%, 55% 60%, 0 60%);
+}
+.premove-move { font-weight: 800; white-space: nowrap; }
+.premove-detail { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-arrow-legend .legend-premove::before {
+  background: repeating-linear-gradient(90deg, #1f9d55 0 3px, transparent 3px 5px);
+}
+/* Settings slider: track fill follows the value; the value reads beside it. */
+.setting-slider {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px;
+}
+.setting-slider input[type="range"] {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 28px; margin: 0;
+  background: transparent; cursor: pointer;
+}
+.setting-slider input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 999px;
+  background: linear-gradient(to right, var(--blue) var(--fill, 50%), var(--rule) var(--fill, 50%));
+}
+.setting-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 20px; height: 20px; margin-top: -7px; border-radius: 50%;
+  background: var(--paper); border: 2px solid var(--blue); box-shadow: 0 1px 3px #0003;
+}
+.setting-slider input[type="range"]:focus-visible { outline: none; }
+.setting-slider input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--focus); }
+.setting-slider output {
+  min-width: 7ch; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.setting-recommended { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }

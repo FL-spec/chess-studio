@@ -1,4 +1,4 @@
-import { COACHES, coachSvg } from "./coaches.mjs";
+import { COACHES, coachPortrait } from "./coaches.mjs";
 import { gameAccuracy, gradeMove, toCentipawns } from "./gamify.mjs";
 import { createArrowOverlay } from "./board-mark.mjs";
 import { maiaLines, maiaRanks } from "./maia.mjs";
@@ -695,6 +695,7 @@ const SETTING_ICONS = {
   coaching: "M4 5h12v8H9l-4 3v-3H4z",
   appearance: "M10 3a7 7 0 1 0 0 14c1 0 1.5-.8 1-1.6-.6-.9 0-2.4 1.4-2.4H15a2 2 0 0 0 2-2 7 7 0 0 0-7-8z",
   practice: "M7 17h6M8 14h4l1-6H7zM10 3v2M8 5h4",
+  human: "M10 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 17c0-3.3 2.7-6 6-6s6 2.7 6 6",
 };
 function renderSettings() {
   const box = $("extra");
@@ -721,7 +722,7 @@ function renderSettings() {
     box.append(section);
     return section;
   }
-  const LONG = new Set(["depth", "elo", "arrowSide"]);
+  const LONG = new Set(["depth", "elo", "arrowSide", "opponentElo"]);
   function control(section, caption, help, key, options, current, save) {
     const row = document.createElement("div");
     row.className = "setting-row";
@@ -782,27 +783,75 @@ function renderSettings() {
     row.append(text, input);
     section.append(row);
   }
+  // A slider for numeric settings: the value shows beside it and is saved on release.
+  function slider(section, caption, help, key, { min, max, step, recommended, format = String }, current, save) {
+    const row = document.createElement("div");
+    row.className = "setting-row";
+    const id = "setting-" + key + "-" + section.childElementCount;
+    const text = document.createElement("div");
+    text.className = "setting-text";
+    const name = document.createElement("label");
+    name.htmlFor = id;
+    name.textContent = caption;
+    text.append(name, label(help, "setting-help"));
+    const field = document.createElement("div");
+    field.className = "setting-slider";
+    const input = document.createElement("input");
+    input.type = "range";
+    input.id = id;
+    Object.assign(input, { min, max, step });
+    input.value = String(current[key] ?? recommended);
+    const value = document.createElement("output");
+    value.htmlFor = id;
+    const show = () => {
+      value.textContent = format(Number(input.value));
+      input.style.setProperty("--fill", ((input.value - min) / (max - min)) * 100 + "%");
+      input.setAttribute("aria-valuetext", value.textContent);
+    };
+    input.oninput = show;
+    input.onchange = () => {
+      current[key] = Number(input.value);
+      save();
+    };
+    show();
+    const hint = label("Recommended " + format(recommended), "setting-recommended");
+    field.append(input, value, hint);
+    row.append(text, field);
+    section.append(row);
+  }
   const prefs = () => [settings, savePreferences];
-  const levels = Array.from({ length: 21 }, (_, index) => [1000 + index * 50, String(1000 + index * 50)]);
 
   const analysis = group("Analysis", "analysis", "Stockfish 19 runs on your computer. Nothing leaves your browser.");
   control(analysis, "Live analysis", "Analyse the game on Chess.com or Lichess as you play.",
     "enabled", [[true, "On"], [false, "Off"]], siteValues, saveSite("enabled"));
-  control(analysis, "Website search depth", "Higher depth is stronger but slower.",
-    "depth", recommended([[9, "Fast"], [12, "Balanced"], [16, "Deep"]], 16), siteValues, saveSite("depth"));
+  control(analysis, "Bullet mode", "Prioritizes one fast Stockfish line and shows an early arrow. Your regular settings resume when you turn it off.",
+    "bullet", [[true, "On"], [false, "Off"]], siteValues, saveSite("bullet"));
+  slider(analysis, "Stockfish depth", "How many moves ahead Stockfish searches on the game page. Higher is stronger but slower.",
+    "depth", { min: 6, max: 30, step: 1, recommended: 16, format: (value) => "Depth " + value }, siteValues, saveSite("depth"));
   control(analysis, "Candidate moves", "How many moves to list for each position.",
     "lines", recommended([1, 2, 3, 4, 5].map((count) => [count, String(count)]), 3), siteValues, saveSite("lines"));
-  control(analysis, "Default analysis mode", "Engine shows the strongest moves. Human shows the moves people play.",
-    "lens", recommended([["engine", "Engine"], ["human", "Human"]], "engine"), siteValues, saveSite("lens"));
+  control(analysis, "Default analysis mode", "Pro plays the strongest move a human would really choose.",
+    "lens", recommended([["engine", "Engine"], ["human", "Human"], ["pro", "Pro"]], "engine"), siteValues, saveSite("lens"));
+  control(analysis, "Safe premoves", "While your opponent thinks, show a green dashed arrow for a premove that Stockfish checked against every reply.",
+    "premoves", recommended([["obvious", "Obvious"], ["safe", "All safe"], ["off", "Off"]], "obvious"), siteValues, saveSite("premoves"));
+
+  const human = group("Human model", "human", "Maia-3 predicts the moves real players make at a given rating. Human and Pro modes use it.");
   const modelSettings = { maia: websiteOptions.maia !== false };
-  control(analysis, "Human predictions", "Maia-3 downloads 46 MB once, then works offline.",
+  control(human, "Human predictions", "Maia-3 downloads 46 MB once, then works offline.",
     "maia", recommended([[true, "Maia-3"], [false, "Lightweight"]], true), modelSettings, async () => {
       websiteOptions = { ...websiteOptions, ...modelSettings };
       await write("websiteOptions", websiteOptions);
     });
-  control(analysis, "Human model level", "The rating of the players the human model imitates.",
-    "elo", recommended(levels, 2000), siteValues, saveSite("elo"));
-  control(analysis, "Human prediction length", "Shorter is faster. 2 shows the move and the likely reply.",
+  control(human, "Player ratings", "Use the ratings shown next to the players when the game page has them. Chess.com ratings are converted to the model's Lichess scale.",
+    "ratingSource", recommended([["page", "From the game"], ["fixed", "My levels"]], "page"), siteValues, saveSite("ratingSource"));
+  slider(human, "Your level", "The rating the human model imitates for you, and for both players when your side is unknown.",
+    "elo", { min: 600, max: 2600, step: 50, recommended: 2000 }, siteValues, saveSite("elo"));
+  control(human, "Opponent level", "The opponent's rating. The model predicts differently against stronger or weaker players.",
+    "opponentElo", recommended([[0, "Same as yours"], ...Array.from({ length: 11 }, (_, index) => [600 + index * 200, String(600 + index * 200)])], 0),
+    siteValues, saveSite("opponentElo"));
+  control(human, "Pro style", "How much evaluation Pro may give up for a more natural move: Precise 2%, Balanced 4%, Natural 7% of the winning chances.",
+    "proStyle", recommended([["precise", "Precise"], ["balanced", "Balanced"], ["natural", "Natural"]], "balanced"), siteValues, saveSite("proStyle"));
+  control(human, "Human prediction length", "Shorter is faster. 2 shows the move and the likely reply.",
     "humanPlies", recommended([2, 3, 5].map((count) => [count, String(count)]), 2), siteValues, saveSite("humanPlies"));
 
   const arrows = group("Board & arrows", "arrows");
@@ -836,9 +885,10 @@ function renderSettings() {
       item.setAttribute("role", "radio");
       item.setAttribute("aria-checked", String(coach.id === current));
       item.setAttribute("aria-label", coach.persona + ", " + coach.name);
+      item.setAttribute("aria-description", coach.tagline);
       item.title = coach.tagline;
-      item.innerHTML = coachSvg(coach.id, "happy");
-      item.append(label(coach.persona, "coach-name"), label(coach.tagline, "coach-tagline"));
+      item.innerHTML = coachPortrait(coach.id, "happy");
+      item.append(label(coach.name, "coach-name"), label(coach.persona, "coach-tagline"));
       item.onclick = () => {
         for (const other of picker.children) other.setAttribute("aria-checked", String(other === item));
         siteValues.coachCharacter = coach.id;
@@ -869,8 +919,8 @@ function renderSettings() {
     "elo", recommended([[1000, "1000 · Beginner"], [1250, "1250 · Developing"], [1450, "1450 · Club"], [1700, "1700 · Advanced"], [1950, "1950 · Expert"]], 1950), ...prefs());
   control(local, "Practice explanations", "When to explain moves while you practise.",
     "coach", recommended([["always", "After every move"], ["demand", "On demand"]], "always"), ...prefs());
-  control(local, "Engine depth", "Higher depth is stronger but slower.",
-    "depth", recommended([[9, "Fast"], [12, "Balanced"], [15, "Deeper"]], 15), ...prefs());
+  slider(local, "Practice depth", "Stockfish depth for the practice board and game review. Higher is stronger but slower.",
+    "depth", { min: 6, max: 24, step: 1, recommended: 15, format: (value) => "Depth " + value }, ...prefs());
 
   const reset = button("Reset to recommended", async () => {
     settings = { ...defaultSettings };
