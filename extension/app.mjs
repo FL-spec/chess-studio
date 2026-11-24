@@ -1,4 +1,6 @@
 import { COACHES, coachPortrait } from "./coaches.mjs";
+import { OPENINGS } from "./book.mjs";
+import { proSetting } from "./pro-lines.mjs";
 import { gameAccuracy, gradeMove, toCentipawns } from "./gamify.mjs";
 import { createArrowOverlay } from "./board-mark.mjs";
 import { maiaLines, maiaRanks } from "./maia.mjs";
@@ -722,7 +724,7 @@ function renderSettings() {
     box.append(section);
     return section;
   }
-  const LONG = new Set(["depth", "elo", "arrowSide", "opponentElo"]);
+  const LONG = new Set(["depth", "elo", "arrowSide", "opponentElo", "openingWhite", "openingBlackE4", "openingBlackD4"]);
   function control(section, caption, help, key, options, current, save) {
     const row = document.createElement("div");
     row.className = "setting-row";
@@ -822,62 +824,81 @@ function renderSettings() {
   const prefs = () => [settings, savePreferences];
 
   const analysis = group("Analysis", "analysis", "Stockfish 19 runs on your computer. Nothing leaves your browser.");
-  control(analysis, "Live analysis", "Analyse the game on Chess.com or Lichess as you play.",
+  control(analysis, "Live analysis", "Analyse your Chess.com and Lichess games.",
     "enabled", [[true, "On"], [false, "Off"]], siteValues, saveSite("enabled"));
-  control(analysis, "Bullet mode", "Prioritizes one fast Stockfish line and shows an early arrow. Your regular settings resume when you turn it off.",
-    "bullet", [[true, "On"], [false, "Off"]], siteValues, saveSite("bullet"));
-  slider(analysis, "Stockfish depth", "How many moves ahead Stockfish searches on the game page. Higher is stronger but slower.",
-    "depth", { min: 6, max: 30, step: 1, recommended: 16, format: (value) => "Depth " + value }, siteValues, saveSite("depth"));
-  control(analysis, "Candidate moves", "How many moves to list for each position.",
-    "lines", recommended([1, 2, 3, 4, 5].map((count) => [count, String(count)]), 3), siteValues, saveSite("lines"));
-  control(analysis, "Default analysis mode", "Pro plays the strongest move a human would really choose.",
+  control(analysis, "Default mode", "Engine: strongest. Human: most played. Pro: strongest human move.",
     "lens", recommended([["engine", "Engine"], ["human", "Human"], ["pro", "Pro"]], "engine"), siteValues, saveSite("lens"));
-  control(analysis, "Safe premoves", "While your opponent thinks, show a green dashed arrow for a premove that Stockfish checked against every reply.",
-    "premoves", recommended([["obvious", "Obvious"], ["safe", "All safe"], ["off", "Off"]], "obvious"), siteValues, saveSite("premoves"));
+  control(analysis, "Candidate moves", "How many moves to list.",
+    "lines", recommended([1, 2, 3, 4, 5].map((count) => [count, String(count)]), 3), siteValues, saveSite("lines"));
+  slider(analysis, "Stockfish depth", "Higher is stronger but slower.",
+    "depth", { min: 6, max: 30, step: 1, recommended: 16, format: (value) => "Depth " + value }, siteValues, saveSite("depth"));
 
-  const human = group("Human model", "human", "Maia-3 predicts the moves real players make at a given rating. Human and Pro modes use it.");
+  const level = group("Level", "human", "One level for Human, Pro, premoves and bullet. You can also change it in the panel.");
+  control(level, "Level from", "From the game uses the players' ratings when the page shows them.",
+    "ratingSource", recommended([["page", "From the game"], ["fixed", "My level"]], "page"), siteValues, saveSite("ratingSource"));
+  slider(level, "Your level", "Your rating for human moves.",
+    "elo", { min: 600, max: 2600, step: 50, recommended: 2000 }, siteValues, saveSite("elo"));
+  control(level, "Opponent level", "Same as yours, or a set rating.",
+    "opponentElo", recommended([[0, "Same as yours"], ...Array.from({ length: 11 }, (_, index) => [600 + index * 200, String(600 + index * 200)])], 0),
+    siteValues, saveSite("opponentElo"));
+
+  const human = group("Human & Pro", "human", "Maia-3 learned from millions of real games how people play at each level.");
   const modelSettings = { maia: websiteOptions.maia !== false };
-  control(human, "Human predictions", "Maia-3 downloads 46 MB once, then works offline.",
+  control(human, "Human model", "Maia-3 is more human. It downloads 46 MB once.",
     "maia", recommended([[true, "Maia-3"], [false, "Lightweight"]], true), modelSettings, async () => {
       websiteOptions = { ...websiteOptions, ...modelSettings };
       await write("websiteOptions", websiteOptions);
     });
-  control(human, "Player ratings", "Use the ratings shown next to the players when the game page has them. Chess.com ratings are converted to the model's Lichess scale.",
-    "ratingSource", recommended([["page", "From the game"], ["fixed", "My levels"]], "page"), siteValues, saveSite("ratingSource"));
-  slider(human, "Your level", "The rating the human model imitates for you, and for both players when your side is unknown.",
-    "elo", { min: 600, max: 2600, step: 50, recommended: 2000 }, siteValues, saveSite("elo"));
-  control(human, "Opponent level", "The opponent's rating. The model predicts differently against stronger or weaker players.",
-    "opponentElo", recommended([[0, "Same as yours"], ...Array.from({ length: 11 }, (_, index) => [600 + index * 200, String(600 + index * 200)])], 0),
-    siteValues, saveSite("opponentElo"));
-  control(human, "Pro style", "How much evaluation Pro may give up for a more natural move: Precise 2%, Balanced 4%, Natural 7% of the winning chances.",
-    "proStyle", recommended([["precise", "Precise"], ["balanced", "Balanced"], ["natural", "Natural"]], "balanced"), siteValues, saveSite("proStyle"));
-  control(human, "Human prediction length", "Shorter is faster. 2 shows the move and the likely reply.",
+  siteValues.proBalance = proSetting(siteValues);
+  slider(human, "Pro balance", "Left plays more like Stockfish. Right plays more like people.",
+    "proBalance", { min: 0, max: 100, step: 5, recommended: 45,
+      format: (value) => (value < 30 ? "Engine-like" : value < 65 ? "Balanced" : "Human-like") + " · " + value }, siteValues, saveSite("proBalance"));
+  control(human, "Human line length", "Moves in each human line. Shorter is faster.",
     "humanPlies", recommended([2, 3, 5].map((count) => [count, String(count)]), 2), siteValues, saveSite("humanPlies"));
 
+  const bullet = group("Bullet", "analysis");
+  control(bullet, "Bullet mode", "One fast suggestion for fast games.",
+    "bullet", [[true, "On"], [false, "Off"]], siteValues, saveSite("bullet"));
+  control(bullet, "Bullet suggestion", "Human: the move a player would make, checked by Stockfish. Engine: Stockfish only.",
+    "bulletStyle", recommended([["human", "Human"], ["engine", "Engine"]], "human"), siteValues, saveSite("bulletStyle"));
+
+  const openingsGroup = group("Premoves & openings", "arrows");
+  control(openingsGroup, "Safe premoves", "A green arrow shows a premove that works against every reply.",
+    "premoves", recommended([["obvious", "Obvious"], ["safe", "All safe"], ["off", "Off"]], "obvious"), siteValues, saveSite("premoves"));
+  const openingChoices = (side, first) => recommended([["", "Any"],
+    ...OPENINGS.filter((item) => item.side === side && (!first || item.moves.startsWith(first)))
+      .map((item) => [item.id, item.name])], "");
+  control(openingsGroup, "Your opening as White", "Its moves are suggested first, so you learn them.",
+    "openingWhite", openingChoices("w"), siteValues, saveSite("openingWhite"));
+  control(openingsGroup, "Against 1.e4", "Your answer as Black.",
+    "openingBlackE4", openingChoices("b", "e4 "), siteValues, saveSite("openingBlackE4"));
+  control(openingsGroup, "Against 1.d4", "Your answer as Black.",
+    "openingBlackD4", openingChoices("b", "d4 "), siteValues, saveSite("openingBlackD4"));
+
   const arrows = group("Board & arrows", "arrows");
-  control(arrows, "Automatic board arrows", "Draw the suggested move on the website board.",
+  control(arrows, "Automatic board arrows", "Draw suggestions on the game board.",
     "arrows", recommended([[true, "On"], [false, "Off"]], true), siteValues, saveSite("arrows"));
-  control(arrows, "Board arrows follow", "Choose whose moves the arrows show.",
+  control(arrows, "Board arrows follow", "Whose moves the arrows show.",
     "arrowSide", recommended([["preview", "Turn with player previews"], ["turn", "Player to move only"], ["selection", "Selected player"]], "preview"),
     siteValues, saveSite("arrowSide"));
-  control(arrows, "Board colours", "Colours of the Studio and preview boards.",
+  control(arrows, "Board colours", "For Studio and preview boards.",
     "board", recommended([["slate", "Slate"], ["green", "Green"], ["wood", "Wood"]], "slate"), ...prefs());
-  control(arrows, "Preview board in panel", "Show a small board that plays the selected move in the pop-out and pinned panel.",
+  control(arrows, "Preview board in panel", "A small board that plays the selected move.",
     "miniBoard", recommended([[true, "Show"], [false, "Hide"]], true), siteValues, saveSite("miniBoard"));
 
   const coaching = group("Coaching", "coaching");
-  control(coaching, "Panel mode", "Coach shows the best moves and arrows and reacts to your moves. Commentator hides suggestions and comments on every move you play.",
+  control(coaching, "Panel mode", "Coach shows moves and arrows. Commentator only comments.",
     "view", recommended([["moves", "Coach"], ["reactions", "Commentator"]], "moves"), siteValues, saveSite("view"));
   {
     const row = document.createElement("div");
     row.className = "setting-row coach-row";
     const text = document.createElement("div");
     text.className = "setting-text";
-    text.append(label("Commentator", "setting-name"), label("Who comments on your moves.", "setting-help"));
+    text.append(label("Your coach", "setting-name"), label("Reacts to your moves in Coach and Commentator.", "setting-help"));
     const picker = document.createElement("div");
     picker.className = "coach-picker";
     picker.setAttribute("role", "radiogroup");
-    picker.setAttribute("aria-label", "Commentator");
+    picker.setAttribute("aria-label", "Your coach");
     const current = siteValues.coachCharacter || "nova";
     for (const coach of COACHES) {
       const item = document.createElement("button");
@@ -899,27 +920,27 @@ function renderSettings() {
     row.append(text, picker);
     coaching.append(row);
   }
-  control(coaching, "Why link", "Show a \"Why <move>?\" link that opens the line in Studio.",
+  control(coaching, "Why link", "A link that explains the move in Studio.",
     "coach", recommended([["always", "Show"], ["off", "Hide"]], "always"), siteValues, saveSite("coach"));
-  control(coaching, "Move-quality badges", "Rate each move: Best, Good, Mistake and more.",
+  control(coaching, "Move-quality badges", "Book, Best, Mistake and more.",
     "badges", recommended([[true, "Show"], [false, "Hide"]], true), ...prefs());
-  control(coaching, "Celebrations", "A small burst when you find the best move.",
+  control(coaching, "Celebrations", "A small burst for best moves.",
     "celebrate", recommended([[true, "On"], [false, "Off"]], true), ...prefs());
 
   const appearance = group("Appearance", "appearance");
-  control(appearance, "Appearance", "Follow your system, or pick light or dark.",
+  control(appearance, "Appearance", "System, light or dark.",
     "theme", recommended([["system", "System"], ["light", "Light"], ["dark", "Dark"]], "system"), ...prefs());
-  control(appearance, "Pop-out and pinned evaluation bar", "Show who is better as a bar above the moves.",
+  control(appearance, "Pop-out and pinned evaluation bar", "Shows who is better.",
     "panelEvaluation", recommended([[true, "Show"], [false, "Hide"]], true), ...prefs());
-  control(appearance, "Animations", "Slide pieces and draw arrows smoothly.",
+  control(appearance, "Animations", "Smooth pieces and arrows.",
     "motion", recommended([["full", "On"], ["reduced", "Reduced"]], "full"), ...prefs());
 
   const local = group("Practice board", "practice");
-  control(local, "Opponent skill target", "How strong the practice opponent plays.",
+  control(local, "Opponent level", "How strong the practice opponent plays.",
     "elo", recommended([[1000, "1000 · Beginner"], [1250, "1250 · Developing"], [1450, "1450 · Club"], [1700, "1700 · Advanced"], [1950, "1950 · Expert"]], 1950), ...prefs());
-  control(local, "Practice explanations", "When to explain moves while you practise.",
+  control(local, "Practice explanations", "When to explain moves.",
     "coach", recommended([["always", "After every move"], ["demand", "On demand"]], "always"), ...prefs());
-  slider(local, "Practice depth", "Stockfish depth for the practice board and game review. Higher is stronger but slower.",
+  slider(local, "Practice depth", "Higher is stronger but slower.",
     "depth", { min: 6, max: 24, step: 1, recommended: 15, format: (value) => "Depth " + value }, ...prefs());
 
   const reset = button("Reset to recommended", async () => {

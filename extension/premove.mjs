@@ -15,12 +15,14 @@ import { expectedScore } from "./pro-lines.mjs";
 //      is below Lichess's inaccuracy threshold (0.05).
 //
 // "obvious" mode accepts only the premoves players make every day:
-// recaptures and captures, checks, promotions, and answers to forced replies.
+// recaptures and captures, checks, promotions, answers to forced replies, and
+// the move you would play anyway (best against 70% of likely replies).
 
 export const MAX_LOSS = 0.04;
 const MAX_REPLIES = 48;
 const MAX_CHECKS = 36;
 const MIN_COVERAGE = 0.5;
+const NATURAL_COVERAGE = 0.7;
 
 export const uciOf = (move) => move.from + move.to + (move.promotion || "");
 
@@ -77,7 +79,7 @@ export async function findSafePremove(board, { analyze, depth = 10, signal, weig
     const vote = asPremove(info.answer);
     votes.set(vote, (votes.get(vote) || 0) + weightOf(id));
   }
-  const ranked = [...votes].sort((a, b) => b[1] - a[1]).slice(0, 2);
+  const ranked = [...votes].sort((a, b) => b[1] - a[1]).slice(0, 3);
   const likeliest = [...answers.keys()].sort((a, b) => weightOf(b) - weightOf(a))[0];
 
   let checks = 0;
@@ -92,7 +94,9 @@ export async function findSafePremove(board, { analyze, depth = 10, signal, weig
     // likely reply (a recapture there may be a quiet move after a rare reply).
     const expected = likeliest && !answers.get(likeliest).ended && findMove(answers.get(likeliest).after, candidate);
     if (!expected) return null;
-    if (mode === "obvious" && !obvious(expected, replies.length)) return null;
+    // Not a capture, check or forced answer: still "obvious" when it is the move
+    // you would play anyway (best against most replies, at almost no cost).
+    const natural = mode === "obvious" && !obvious(expected, replies.length);
     let coverage = 0, cancelled = 0, worstLoss = 0, checked = 0;
     for (const [id, info] of answers) {
       if (info.ended) continue;
@@ -118,6 +122,7 @@ export async function findSafePremove(board, { analyze, depth = 10, signal, weig
     const total = [...answers.keys()].reduce((sum, id) => sum + weightOf(id), 0) || 1;
     // It must be playable after the most likely reply and best against most replies.
     if (!checked || coverage / total < MIN_COVERAGE) return null;
+    if (natural && (coverage / total < NATURAL_COVERAGE || worstLoss > 0.01)) return null;
     const shown = expected;
     return {
       move: candidate.slice(0, 4) + (shown?.promotion || ""),

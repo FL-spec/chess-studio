@@ -20,6 +20,7 @@ export function expectedScore(cp) {
 }
 
 export const GRADES = {
+  book: { label: "Book", symbol: "", tone: "book" },
   brilliant: { label: "Brilliant", symbol: "!!", tone: "best" },
   best: { label: "Best", symbol: "★", tone: "best" },
   excellent: { label: "Excellent", symbol: "!", tone: "good" },
@@ -97,6 +98,8 @@ export function gameAccuracy(grades) {
 export function streak(grades) {
   let count = 0;
   for (let index = grades.length - 1; index >= 0; index -= 1) {
+    // Book moves neither count nor break the run.
+    if (grades[index].key === "book") continue;
     if (!["brilliant", "best", "excellent"].includes(grades[index].key)) break;
     count += 1;
   }

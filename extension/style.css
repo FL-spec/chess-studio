@@ -1586,7 +1586,7 @@ button.reset-settings { margin: 16px 0 32px 42px; background: transparent; }
 .swatches [data-value="green"] .swatch { --sw-light: #ebecd0; --sw-dark: #779556; }
 .swatches [data-value="wood"] .swatch { --sw-light: #f0d9b5; --sw-dark: #b58863; }
 .settings-group::after { content: none; }
-.settings-intro::after { content: " · Green dot = recommended"; }
+.settings-group:first-of-type .settings-intro::after { content: " A green dot marks the recommended choice."; }
 /* Mini-board with the eval bar attached */
 .mini-stage { width: min(100%, 300px); margin: 4px auto 16px; }
 .mini-stage .mini-board { width: 100%; margin: 0; border-radius: 12px 12px 0 0; box-shadow: none; }
@@ -2227,3 +2227,27 @@ button.info-button[aria-expanded="true"] { color: var(--blue); background: var(-
 }
 .move-controls > .move-control-group + .move-control-group button { flex: 1 1 0; justify-content: center; text-align: center; }
 .move-controls > button.arrow-switch { grid-column: 1 / -1; justify-self: start; }
+
+/* ---------- v1.9.0: Book grade, coach strip ---------- */
+.grade-badge[data-tone="book"], .cm-item[data-tone="book"] .grade-badge { --tone: #a07a52; }
+:root[data-theme="dark"] .grade-badge[data-tone="book"] { --tone: #d0a77a; }
+.grade-badge[data-tone="book"] .grade-symbol::before {
+  content: ""; width: 13px; height: 11px; background: #fff;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 13 11'%3E%3Cpath d='M0 1.2C1.8.4 4 .4 6 1.4v9.4C4 9.8 1.8 9.8 0 10.6zM13 1.2c-1.8-.8-4-.8-6 .2v9.4c2-1 4.2-1 6-.2z'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 13 11'%3E%3Cpath d='M0 1.2C1.8.4 4 .4 6 1.4v9.4C4 9.8 1.8 9.8 0 10.6zM13 1.2c-1.8-.8-4-.8-6 .2v9.4c2-1 4.2-1 6-.2z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.coach-react .coach-react-figure { width: 80px; height: 80px; }
+.coach-react-say { font-size: 15px; }
+.coach-react-extra { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.coach-react-label { font-size: 12px; }
+button.move-row-choice[data-book] .move-route { color: #a07a52; font-weight: 700; }
+:root[data-theme="dark"] button.move-row-choice[data-book] .move-route { color: #d0a77a; }
+select.level-select {
+  flex: 0 0 auto; min-height: 30px; max-width: 170px; padding: 2px 26px 2px 10px; border-radius: 999px;
+  font-size: 13px; font-weight: 700; color: var(--ink); background-color: var(--rail); border: 1px solid var(--rule);
+}
+select.level-select[hidden] { display: none; }
+/* Settings: bigger, easier labels. */
+.setting-text > label, .setting-text > .setting-name { font-size: 16px; font-weight: 700; color: var(--ink); }
+.setting-help { font-size: 14px; line-height: 1.45; }
+.settings-intro { font-size: 15px; line-height: 1.5; }

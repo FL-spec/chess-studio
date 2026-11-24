@@ -36,7 +36,7 @@ assert.equal(gradedTactic(gradeMove(20, 18, true), offeredQueen, { pv: ["h8h7"] 
 const opening = new Chess().move("e4");
 const sound = moveCommentary(opening, gradeMove(30, 27, true), { pv: ["e2e4"] },
   { pv: ["e7e5", "g1f3"] });
-assert.match(sound.reason, /e4|opens/i);
+assert.match(sound.reason, /e4|opens|center/i);
 assert.match(sound.example, /e5.*Nf3.*e5/);
 assert.equal(sound.alternative, undefined);
 const blunderNote = moveCommentary(offeredQueen, droppedQueen,
@@ -73,4 +73,19 @@ assert.equal(latestReaction([graded("blunder", true, 1), graded("good", false, 2
 const run = [1, 3, 5].map(ply => graded("best", true, ply)).flatMap(entry => [entry, graded("good", false, entry.ply + 1)]);
 assert.equal(latestReaction(run.slice(0, 5))?.mood, "happy");
 assert.equal(latestReaction(run.slice(0, 3)), null);
+// Book moves and coach lines.
+const { bookMove, repertoireMove } = await import("../extension/book.mjs");
+const { coachLine } = await import("../extension/coaches.mjs");
+const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+assert.equal(bookMove(START, "e4").name, "King's Pawn Opening");
+assert.equal(bookMove(START, "h4"), null);
+assert.equal(repertoireMove(START, { w: "london" }).san, "d4");
+assert.equal(repertoireMove(START, { w: "" }), null);
+const bookLine = coachLine({ grade: { key: "book", opening: "Italian Game" }, move: { san: "Bc4" }, mine: true, ply: 5 }, "kai");
+assert.equal(bookLine.quiet, true);
+assert.equal(bookLine.label, "Book · Italian Game");
+const bestLine = coachLine({ grade: { key: "best", label: "Best", tone: "best" }, move: { san: "Nf3" }, mine: true, ply: 3,
+  commentary: { reason: "Develops the knight to f3.", example: "After Nc6, d4" } }, "theo");
+assert.match(bestLine.text, /^(Precise|Correct)\. Develops the knight/);
+assert.equal(bestLine.extra, "Plan: After Nc6, d4");
 console.log("Gamify tests passed: grade thresholds, mate scores, sacrifices, material blunders, streaks, accuracy and coach reactions.");

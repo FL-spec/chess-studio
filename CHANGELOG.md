@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.9.0 · 2026-11-24
+
+### Added
+
+- **Book moves.** Opening theory is graded Book with the opening name, as on Chess.com. The book has 34 named main lines and the bundled move statistics. In the first 8 moves, Maia-3 also counts as an opening explorer: a strong move that at least 12% of 2200-rated players choose is Book.
+- **Your openings.** In Settings, choose an opening as White, an answer to 1.e4 and an answer to 1.d4. In those positions, your opening's move comes first, labelled "Your opening · London System".
+- **One level everywhere.** A level picker in the panel (Human and Pro) changes the same level as Settings, for Human, Pro, premoves and bullet.
+- **Pro balance.** A slider from engine-like to human-like replaces the three Pro styles. Saved styles still work.
+- **Coach voices.** Each coach has its own words. Coach and Commentator now say the same things.
+
+### Changed
+
+- **Bullet mode is human by default.** It shows the move a player would make, checked by a quick Stockfish search (depth 8). "Engine" keeps the old Stockfish-only mode.
+- **Coach comments.** Your moves get a short comment with the plan, or the better move after a mistake. Short sounds such as "Hm." appear only for book moves. The face still reacts only to moves that matter.
+- **Clearer move explanations.** Development and central pawn moves are explained as a coach would ("Develops the knight to c6", "Takes space in the center").
+- **Steadier premoves.** The premove check now runs first, within a time budget (2.5 s, or 1.2 s in bullet), instead of waiting behind the main search. A fast opponent no longer cancels it every move. "Obvious" also accepts the move you would play anyway: best against at least 70% of likely replies, at almost no cost. On Chess.com, your colour is found more reliably.
+- **Faster human model.** One Maia-3 run per position is shared by Pro, premoves and bullet, and Pro starts it while Stockfish searches.
+- **Shorter, plainer text** in Settings and the mode guides, with larger labels. Settings now have Level, Human & Pro, Bullet, and Premoves & openings sections.
+
+### Fixed
+
+- A new game no longer shows the previous game's last grade.
+
 ## 1.8.3 · 2026-11-24
 
 ### Changed

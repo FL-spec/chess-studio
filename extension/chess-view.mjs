@@ -86,6 +86,20 @@ export function explain(move) {
       "."
     );
   const before = new Chess(move.before);
+  // Development and central pawns first: that is what a coach would say.
+  const homeRank = move.color === "w" ? "1" : "8";
+  if ("nb".includes(move.piece) && move.from[1] === homeRank) {
+    const castling = (after.fen().split(" ")[2] || "").includes(move.color === "w" ? "K" : "k");
+    const clear = castling && ["f", "g"].every(file => !after.get(file + homeRank));
+    const wasBlocked = ["f", "g"].some(file => before.get(file + homeRank));
+    return "Develops the " + kind + " to " + move.to + (clear && wasBlocked ? " and prepares to castle." : ".");
+  }
+  if (move.piece === "p" && /^[cde][45]$/.test(move.to)) {
+    const file = files.indexOf(move.to[0]);
+    const rank = Number(move.to[1]) + (move.color === "w" ? 1 : -1);
+    const controlled = [files[file - 1], files[file + 1]].filter(Boolean).map((neighbor) => neighbor + rank);
+    return "Takes space in the center and controls " + controlled.join(" and ") + ".";
+  }
   for (const type of ["b", "r", "q"]) {
     for (const square of after.findPiece({ type, color: move.color })) {
       if (square === move.to) continue;

@@ -18,7 +18,21 @@ export const PRO_STYLES = {
   balanced: { tolerance: 0.04, lambda: 0.025, label: "Balanced" },
   natural: { tolerance: 0.07, lambda: 0.05, label: "Natural" },
 };
-export const proStyle = (name) => PRO_STYLES[name] || PRO_STYLES.balanced;
+// Pro balance: 0 plays like the engine, 100 like the human model. The named
+// styles are points on this scale.
+export const STYLE_BALANCE = { precise: 15, balanced: 45, natural: 85 };
+export function balanceStyle(balance) {
+  const b = Math.max(0, Math.min(100, Number(balance))) / 100;
+  const label = b < 0.3 ? "Precise" : b < 0.65 ? "Balanced" : "Natural";
+  return { tolerance: 0.01 + 0.07 * b, lambda: 0.005 + 0.055 * b, label };
+}
+export function proStyle(style) {
+  if (typeof style === "number" && Number.isFinite(style)) return balanceStyle(style);
+  return PRO_STYLES[style] || PRO_STYLES.balanced;
+}
+/** The Pro setting from the saved options: the balance slider, else the named style. */
+export const proSetting = (options) =>
+  Number.isFinite(options?.proBalance) ? options.proBalance : (STYLE_BALANCE[options?.proStyle] ?? STYLE_BALANCE.balanced);
 
 // Lichess's win-probability curve (lichess.org/page/accuracy), as an expected
 // score for the side to move. Centipawns are clamped to ±1000 as Lichess does.

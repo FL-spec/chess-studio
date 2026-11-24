@@ -70,15 +70,18 @@
       : undefined;
     const profile = document.querySelector('#sidebar-main-menu a[href*="/member/"]');
     const account = profile?.pathname.split("/").filter(Boolean).at(-1)?.toLowerCase();
-    const match = account && Object.keys(names).find(
-      (color) => names[color].toLowerCase() === account,
-    );
+    // Names can carry a title or flag text ("GM name"): match the last word.
+    const plain = (value) => (value || "").toLowerCase().trim().split(/\s+/).at(-1);
+    const match = account && Object.keys(names).find((color) => plain(names[color]) === account);
     const practiceSite = /^\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/)?play\/(coach|computer)(?:\/|$)/i
       .test(location.pathname);
+    // While you play, Chess.com puts your side at the bottom of the board.
+    const playing = /^\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/)?(?:play\/online|game\/(?:live|daily))(?:\/|$)/i
+      .test(location.pathname) && !account;
     return {
       names,
       ratings,
-      playerColor: match || (practiceSite ? (flipped ? "b" : "w") : undefined),
+      playerColor: match || (practiceSite || playing ? (flipped ? "b" : "w") : undefined),
     };
   }
   function pageBoard() {

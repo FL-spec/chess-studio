@@ -5,11 +5,12 @@ import { describe, renderCompanion, renderScanning } from "./companion-view.mjs"
 import { analyze, score } from "./engine.mjs";
 import { maiaLines, maiaPredict } from "./maia.mjs";
 import { humanLines, humanRanks } from "./human-lines.mjs";
-import { humanCandidates, proMetric, rankPro } from "./pro-lines.mjs";
+import { humanCandidates, proMetric, proSetting, rankPro } from "./pro-lines.mjs";
 import { findSafePremove, uciOf } from "./premove.mjs";
 import { moverRatings, playerRatings } from "./ratings.mjs";
 import { supported } from "./detect.mjs";
-import { gradedTactic, gradeMove, streak, toCentipawns } from "./gamify.mjs";
+import { GRADES, gradedTactic, gradeMove, streak, toCentipawns } from "./gamify.mjs";
+import { bookMove, repertoireMove } from "./book.mjs";
 const api = chrome.storage.local;
 const root = document.getElementById("companion-content");
 const isWebsiteWindow = document.body.classList.contains("website");
@@ -149,6 +150,13 @@ function draw(view) {
   renderCompanion(root, new Chess(view.fen), view, {
     showArrows: send,
     loadHuman: view.loadHuman,
+    // One level for everything: saved to the same settings as the Settings page.
+    async setLevel(value) {
+      const { websiteOptions: saved = {} } = await chrome.storage.local.get("websiteOptions");
+      await chrome.storage.local.set({ websiteOptions: value === "page"
+        ? { ...saved, ratingSource: "page" }
+        : { ...saved, ratingSource: "fixed", elo: Number(value) } });
+    },
     selectPlayer(color) {
       const role = view.playerColor ? (color === view.playerColor ? "you" : "opponent") : color;
       selectedPlayers.set(source, role);
@@ -233,14 +241,24 @@ async function refreshStudio() {
 
 // Human-model move probabilities for the player to move (Maia-3, or the
 // lightweight model when Maia is off or unavailable).
+// One model run per position and ratings, shared by Pro, premoves and bullet.
+const humanCache = new Map();
 async function predictHuman(board, options, signal, skipMaia, ratings) {
   const [self, opponent] = moverRatings(ratings, board.fen());
   if (options.maia && !skipMaia) {
+    const cacheKey = board.fen() + "|" + self + "|" + opponent;
     try {
       signal?.throwIfAborted();
-      const [prediction] = await maiaPredict([board], [self], [opponent]);
+      let pending = humanCache.get(cacheKey);
+      if (!pending) {
+        pending = maiaPredict([board], [self], [opponent]).then(([prediction]) => ({ ...prediction, model: "Maia-3" }));
+        humanCache.set(cacheKey, pending);
+        pending.catch(() => humanCache.delete(cacheKey));
+        if (humanCache.size > 64) humanCache.delete(humanCache.keys().next().value);
+      }
+      const prediction = await pending;
       signal?.throwIfAborted();
-      return { ...prediction, model: "Maia-3" };
+      return prediction;
     } catch {
       signal?.throwIfAborted();
     }
@@ -261,8 +279,23 @@ async function computePro(board, options, signal, engineLines, ratings, skipMaia
     const [line] = await analyze(board, { depth: options.depth, count: 1, only: id, signal });
     if (line?.pv[0] === id) extra.push({ ...line, searched: true });
   }
-  const ranked = rankPro([...engineLines, ...extra], human.ranks, options.proStyle);
+  const ranked = rankPro([...engineLines, ...extra], human.ranks, proSetting(options));
   return { ...ranked, model: human.model, outcome: human.outcome };
+}
+
+// Your opening repertoire: in its positions, your chosen book move comes first
+// (searched by Stockfish if it is not among the engine lines).
+async function withRepertoire(view, board, lines, signal, depth) {
+  if (!lines?.length || (view.playerColor && board.turn() !== view.playerColor)) return lines;
+  const options = websiteOptions;
+  const choice = repertoireMove(board.fen(), { w: options.openingWhite, b: [options.openingBlackE4, options.openingBlackD4] });
+  if (!choice) return lines;
+  let line = lines.find(item => item.pv[0] === choice.uci);
+  if (!line) {
+    [line] = await analyze(board, { depth, count: 1, only: choice.uci, signal });
+    if (line?.pv[0] !== choice.uci) return lines;
+  }
+  return [{ ...line, book: choice.name }, ...lines.filter(item => item.pv[0] !== choice.uci)].slice(0, lines.length);
 }
 
 const statuses = {
@@ -418,7 +451,9 @@ async function followWebsite() {
         playerColor: observation.playerColor,
         ratings: observation.ratings,
         modelRatings,
-        proStyle: websiteOptions.proStyle,
+        proStyle: proSetting(websiteOptions),
+        level: websiteOptions.elo,
+        levelSource: websiteOptions.ratingSource,
         show: websiteOptions.enabled,
         coachVisible: websiteOptions.coach === "always",
         candidates: [],
@@ -459,7 +494,9 @@ async function followWebsite() {
           view.proPending = true;
           view.engineDone
             .then(lines => computePro(board, options, signal, lines, view.modelRatings, view.maiaError))
-            .then(result => { view.pro = result; })
+            .then(async result => {
+              view.pro = { ...result, lines: await withRepertoire(view, board, result.lines, signal, Math.min(options.depth, 14)) };
+            })
             .catch(error => {
               if (error.name !== "AbortError") view.pro = { lines: view.candidates, trap: null, failed: true };
             })
@@ -503,10 +540,16 @@ async function followWebsite() {
       renderedSite = view;
       draw(view);
       if (!view.bullet) gradeMoveOf(view);
-      if (controls.lens === "pro" && !view.replyFocus) view.loadPro?.();
-      if (view.pending && view.playerColor && board.turn() !== view.playerColor && !view.analysis)
-        findPremove(view, board, controller.signal);
-      if (view.pending) {
+      if (controls.lens === "pro" && !view.replyFocus) {
+        // Warm the human model while Stockfish searches.
+        if (view.pending) predictHuman(board, websiteOptions, controller.signal, false, modelRatings).catch(() => {});
+        view.loadPro?.();
+      }
+      const runSignal = controller.signal;
+      const premoveRun = view.pending && view.playerColor && board.turn() !== view.playerColor && !view.analysis
+        ? findPremove(view, board, controller.signal) : null;
+      if (view.pending) (premoveRun || Promise.resolve()).then(() => {
+        if (renderedSite !== view || runSignal.aborted) return;
         // Progressive results: show completed shallow iterations while the search
         // deepens. `view.searching` / `view.depth` / `view.targetDepth` describe it;
         // the final candidates are still the completed target-depth result.
@@ -517,17 +560,18 @@ async function followWebsite() {
         analyze(board, {
           depth: websiteOptions.depth,
           count: websiteOptions.lines,
-          signal: controller.signal,
+          signal: runSignal,
           onProgress: progress.update,
         })
-          .then((lines) => {
+          .then(async (lines) => {
+            engineDone.resolve(lines);
+            lines = await withRepertoire(view, board, lines, runSignal, Math.min(websiteOptions.depth, 14));
             progress.stop();
             if (renderedSite !== view || mode !== "website") return;
             view.pending = false;
             view.searching = false;
             view.candidates = lines;
             view.depth = lines[0]?.depth ?? view.targetDepth;
-            engineDone.resolve(lines);
             draw(view);
           })
           .catch((error) => {
@@ -539,7 +583,7 @@ async function followWebsite() {
             view.error = error.message;
             draw(view);
           });
-      }
+      });
     }
   }
   timer = setTimeout(() => followWebsite().catch(showError), 450);
@@ -552,14 +596,20 @@ async function findPremove(view, board, signal) {
   if (premoveMode === "off") return;
   view.premovePending = true;
   try {
-    const human = await predictHuman(board, options, signal, view.maiaError, view.modelRatings);
-    const weights = new Map(human.ranks.map(row => [uciOf(row.move), row.probability]));
+    // Reply weights from the human model, but never wait long for them.
+    const human = await Promise.race([
+      predictHuman(board, options, signal, view.maiaError, view.modelRatings),
+      new Promise(resolve => setTimeout(() => resolve(null), 250)),
+    ]);
+    const weights = human ? new Map(human.ranks.map(row => [uciOf(row.move), row.probability])) : undefined;
     // Wide positions get a shallower check so it still finishes within the opponent's move.
     const width = board.moves().length;
-    const depth = Math.max(8, Math.min(width > 30 ? 10 : 12, options.depth - 4));
-    view.premove = await findSafePremove(board, { analyze, depth, signal, weights, mode: premoveMode });
+    const depth = view.bullet ? 8 : Math.max(8, Math.min(width > 30 ? 10 : 12, options.depth - 4));
+    // A time budget keeps premoves predictable; the main search waits for it.
+    const budget = AbortSignal.any([signal, AbortSignal.timeout(view.bullet ? 1200 : 2500)]);
+    view.premove = await findSafePremove(board, { analyze, depth, signal: budget, weights, mode: premoveMode });
   } catch (error) {
-    if (error.name === "AbortError") return;
+    if (signal.aborted) return;
     view.premove = null;
   } finally {
     view.premovePending = false;
@@ -579,7 +629,8 @@ function gradeStore(source) {
 }
 function attachGrades(view) {
   const store = gradeStores.get(view.source);
-  if (!store) return;
+  // A new game (start position) shows no grades from the last one.
+  if (!store || plyOf(view.fen) === 0) return;
   // Only show grades for moves of the game on screen.
   const known = (entry) => entry && view.fen !== entry.move.before;
   view.myGrade = known(store.mine) ? store.mine : null;
@@ -619,7 +670,22 @@ async function gradeMoveOf(view) {
   const afterGame = new Chess(last.after);
   const afterCp = afterGame.isCheckmate() ? 10000 : afterGame.isGameOver() ? 0 : -toCentipawns(reply);
   const beforeCp = toCentipawns(best);
-  const grade = gradedTactic(gradeMove(beforeCp, afterCp, wasBest), last, reply, beforeCp, afterCp, wasBest);
+  let grade = gradedTactic(gradeMove(beforeCp, afterCp, wasBest), last, reply, beforeCp, afterCp, wasBest);
+  // Opening theory is graded "Book", as on Chess.com, unless it loses material.
+  const ply = plyOf(last.after);
+  let book = ply <= 30 && grade.tone !== "bad" ? bookMove(last.before, last.san) : null;
+  // Beyond the named lines, a popular strong move early in the game is theory
+  // too: Maia-3 (learned from millions of games) says how often strong players
+  // choose it, like an opening explorer.
+  const lastBook = store.history.at(-1)?.grade.key === "book" ? store.history.at(-1) : null;
+  if (!book && ply <= 16 && grade.loss < 0.05 && (ply <= 2 || lastBook)) {
+    try {
+      const prediction = await predictHuman(new Chess(last.before), websiteOptions, undefined, false, { w: 2200, b: 2200 });
+      const share = prediction.ranks.find(row => row.move.from === last.from && row.move.to === last.to)?.probability || 0;
+      if (prediction.model === "Maia-3" && share >= 0.12) book = { name: lastBook?.grade.opening || "Opening theory" };
+    } catch { /* no model: no extra book moves */ }
+  }
+  if (book) grade = { ...GRADES.book, key: "book", loss: grade.loss, opening: book.name };
   const live = renderedSite?.source === view.source ? renderedSite : null;
   const playerColor = live?.playerColor ?? view.playerColor;
   const mine = !playerColor || last.color === playerColor;

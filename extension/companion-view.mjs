@@ -3,7 +3,7 @@ import { createLineOverlay } from "./board-mark.mjs";
 import { drawBoard, moveVisual } from "./chess-view.mjs";
 import { Chess } from "./vendor/chess.mjs";
 import { score, uci } from "./engine.mjs";
-import { coachPortrait, latestReaction } from "./coaches.mjs";
+import { coachLine, coachPortrait, coachSound, latestReaction } from "./coaches.mjs";
 import { proLines, proMetric, proStyle } from "./pro-lines.mjs";
 import { moveAccuracy } from "./gamify.mjs";
 // Display preferences shared with the Studio settings (UI-only).
@@ -17,26 +17,24 @@ let coachId = "nova";
 let miniOpen = true;
 let guideOpen = false;
 const percent = (value) => Math.round(value * 100) + "%";
-// What the current analysis mode does, with the numbers it uses.
+// What the current analysis mode does, in a few short sentences.
 function modeGuide(view, lens) {
   const ratings = view.modelRatings;
   const mover = view.fen?.split(" ")[1] === "b" ? "b" : "w";
   const self = ratings?.[mover];
   const opponent = ratings?.[mover === "w" ? "b" : "w"];
-  const level = self ? "players rated about " + self + (opponent && opponent !== self ? " facing " + opponent : "") : "players at the chosen level";
-  const source = ratings?.source === "page" ? " Ratings come from the game page, converted to the model's Lichess scale." : "";
+  const level = self ? " Level: " + self + (opponent && opponent !== self ? " against " + opponent : "") +
+    (ratings?.source === "page" ? " (from the game)." : ".") : "";
   const outcome = lens === "pro" ? view.pro?.outcome : view.humanOutcome;
-  const chances = outcome ? " From here, the model expects these players to score about " + percent(outcome.score) +
-    " for the side to move (wins plus half the draws)." : "";
+  const chances = outcome ? " Expected score: " + percent(outcome.score) + "." : "";
   if (lens === "human")
-    return "Predicts the moves " + level + " actually play, from millions of online games. The percentage is how often they choose each move." + chances + source;
+    return "The moves players at this level usually play. The % shows how often they play each one." + level + chances;
   if (lens === "pro") {
     const style = proStyle(view.proStyle);
-    return "Finds the strongest move a human would really play. Stockfish checks the moves " + level +
-      " choose most, keeps those that lose at most " + percent(style.tolerance) +
-      " of the winning chances, and ranks them by how natural they are (" + style.label + "). Each row shows the evaluation and how often players choose the move." + chances + source;
+    return "The best move a human would really play. Stockfish checks the popular moves and keeps those close to the best (within " +
+      percent(style.tolerance) + "). Balance: " + style.label + "." + level + chances;
   }
-  return "Stockfish 19 runs on your computer. It ranks moves by evaluation, in pawns for the player to move, at depth " +
+  return "Stockfish's best moves. Scores are in pawns for the side to move. Depth " +
     (view.targetDepth || view.candidates?.[0]?.depth || "–") + ".";
 }
 if (globalThis.chrome?.storage?.local) {
@@ -184,13 +182,9 @@ function commentItem(entry) {
   badge.dataset.tone = grade.tone;
   badge.append(describe(grade.symbol, "grade-symbol", "span"), describe(move.san + " · " + grade.label, "", "span"));
   head.append(who, badge);
-  item.append(head, describe(commentary.reason, "cm-say"));
-  if (commentary.example) item.append(describe(commentary.example, "cm-example"));
-  if (commentary.alternative) {
-    const suggestion = describe("", "cm-alternative");
-    suggestion.append(describe("Better move", "cm-alternative-label", "strong"), commentary.alternative);
-    item.append(suggestion);
-  }
+  const line = coachLine(entry, coachId);
+  item.append(head, describe(line.quiet ? "A main-line move in the " + (entry.grade.opening || "opening") + "." : line.text, "cm-say"));
+  if (line.extra) item.append(describe(line.extra, "cm-example"));
   return item;
 }
 const VISIBLE = 3;
@@ -238,10 +232,10 @@ function reactionCard(view) {
   if (state.status.textContent !== text) state.status.textContent = text;
   return state.root;
 }
-// Coach mode: a compact reaction (animated portrait + comment) under the last
-// move's grade. It speaks only when a move matters; otherwise it stays idle.
+// Coach mode: the same coach and words as Commentator, in a compact strip.
+// The face reacts only to moves that matter; the bubble always says something
+// short: a comment on your move, the opening name for book moves, or a sound.
 let coachStrip = null;
-const IDLE_SOUNDS = ["Hm.", "Hmm…", "Mm-hm.", "Ah.", "Hm, hm.", "Uh-huh.", "Okay.", "Mm."];
 function coachReaction(view) {
   const history = view.gradeHistory || [];
   if (!coachStrip || coachStrip.source !== view.source) {
@@ -253,42 +247,38 @@ function coachReaction(view) {
     const bubble = document.createElement("div");
     bubble.className = "coach-react-bubble";
     root.append(figure, bubble);
-    coachStrip = { source: view.source, root, figure, bubble, mood: "", coach: "" };
+    coachStrip = { source: view.source, root, figure, bubble, mood: "", coach: "", say: "" };
     setMood(coachStrip, "idle", "");
   }
   const state = coachStrip;
-  const show = (entry) => {
-    if (!entry) {
-      state.root.removeAttribute("data-speaking");
-      state.idleKey = null;
-      idle();
-      return;
+  react(state, latestReaction(history));
+  // What to say: the latest reaction, else your latest move (within the last 2 plies).
+  const lastPly = history.at(-1)?.ply ?? -1;
+  const latest = history.at(-1);
+  const found = latestReaction(history)?.entry ||
+    [...history].reverse().find((entry) => entry.mine && lastPly - entry.ply < 2 && entry.grade.key !== "book") ||
+    (latest?.grade.key === "book" ? latest : null);
+  const line = found ? coachLine(found, coachId) : null;
+  const sound = !line || line.quiet;
+  const say = (line ? line.label + "|" + line.text : "") + "|" + lastPly + "|" + coachId;
+  if (state.say !== say) {
+    state.say = say;
+    const parts = [];
+    if (line) parts.push(describe(line.label, "coach-react-label", "span"));
+    if (sound) {
+      state.sound = line?.text || (lastPly < 0 ? "…" : coachSound(coachId, lastPly, state.sound));
+      const text = describe(state.sound, "coach-react-idle");
+      text.setAttribute("aria-hidden", "true");
+      parts.push(text);
+    } else {
+      parts.push(describe(line.text, "coach-react-say"));
+      if (line.extra) parts.push(describe(line.extra, "coach-react-extra"));
     }
-    state.root.dataset.speaking = "";
-    const who = entry.mine ? "" : "Opponent · ";
-    state.bubble.replaceChildren(
-      describe(who + entry.move.san + " · " + entry.grade.label, "coach-react-label", "span"),
-      describe(entry.commentary?.reason || entry.grade.label, "coach-react-say"));
-    animate(state.bubble, [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }],
-      { duration: 280, easing: "cubic-bezier(.2,.8,.2,1)" });
-  };
-  // Nothing worth a comment: a small "hm" that changes with each move.
-  const idle = () => {
-    const ply = history.length ? history[history.length - 1].ply : -1;
-    if (state.idleKey === ply) return;
-    state.idleKey = ply;
-    const options = IDLE_SOUNDS.filter((sound) => sound !== state.idleSound);
-    state.idleSound = ply < 0 ? "…" : options[(ply * 7 + 3) % options.length];
-    const sound = describe(state.idleSound, "coach-react-idle");
-    sound.setAttribute("aria-hidden", "true");
-    state.bubble.title = "Nothing worth a comment. The coach speaks up when a move matters.";
-    state.bubble.replaceChildren(sound);
-    animate(state.bubble, [{ opacity: 0 }, { opacity: 1 }], { duration: 240, delay: 500 + Math.random() * 400, fill: "backwards" });
-  };
-  if (!state.bubble.firstChild) show(null);
-  react(state, latestReaction(history), show);
-  if (!state.root.hasAttribute("data-speaking")) idle();
-  else state.bubble.removeAttribute("title");
+    state.root.toggleAttribute("data-speaking", !sound);
+    state.bubble.replaceChildren(...parts);
+    animate(state.bubble, [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }],
+      { duration: 260, delay: 450 + Math.random() * 450, easing: "cubic-bezier(.2,.8,.2,1)", fill: "backwards" });
+  }
   return state.root;
 }
 export function describe(text, cls, tag = "p") {
@@ -352,7 +342,8 @@ function gradeBadge(view) {
   badge.setAttribute("role", "status");
   const entry = view.myGrade || view.oppGrade;
   const san = entry?.move.san || view.last?.san || "";
-  badge.title = san + " was " + grade.label.toLowerCase();
+  badge.title = grade.key === "book" ? san + " is a book move" + (grade.opening ? " in the " + grade.opening : "") + "."
+    : san + " was " + grade.label.toLowerCase() + ".";
   const who = view.playerColor ? (view.myGrade ? "Your " : "Their ") : "";
   badge.append(describe(grade.symbol, "grade-symbol", "span"), describe(who + san + " · " + grade.label, "", "span"));
   if (view.gradeCelebrate && view.myGrade && view.gradeMove?.after === view.myGrade.move.after) badge.dataset.celebrate = "";
@@ -593,6 +584,7 @@ export function renderCompanion(container, board, view, actions = {}) {
     guideButton.setAttribute("aria-expanded", String(guideOpen));
     guideCard.hidden = !guideOpen;
     guideCard.textContent = modeGuide(view, state.lens);
+    levelSelect.hidden = state.lens === "engine";
   }
   const single = action("Selected move", () => chooseArrowMode(false));
   const all = action("All moves", () => chooseArrowMode(true));
@@ -621,6 +613,20 @@ export function renderCompanion(container, board, view, actions = {}) {
   const status = document.createElement("div");
   status.className = "status-row";
   status.append(info);
+  // Level: the rating the human model plays at. Changing it here changes it
+  // everywhere (Settings, Human, Pro, premoves and bullet).
+  const levelSelect = document.createElement("select");
+  levelSelect.className = "level-select";
+  levelSelect.setAttribute("aria-label", "Level");
+  levelSelect.title = "The rating the human moves are based on";
+  const pageLevel = view.levelSource === "page";
+  levelSelect.add(new Option("Level: from the game", "page", false, pageLevel));
+  for (let rating = 800; rating <= 2600; rating += 100)
+    levelSelect.add(new Option("Level: " + rating, String(rating), false, !pageLevel && Number(view.level) === rating));
+  if (!pageLevel && ![...levelSelect.options].some(option => option.selected))
+    levelSelect.add(new Option("Level: " + view.level, String(view.level), true, true), 1);
+  levelSelect.onchange = () => actions.setLevel?.(levelSelect.value);
+  if (view.show && actions.setLevel) status.append(levelSelect);
   if (view.show) status.append(guideButton);
   const list = document.createElement("div");
   list.className = "companion-lines";
@@ -650,12 +656,15 @@ export function renderCompanion(container, board, view, actions = {}) {
     return state.modes[state.lens][view.replyFocus ? "reply" : "turn"];
   }
   function roots() {
+    return view.bullet ? allRoots().slice(0, 1) : allRoots();
+  }
+  function allRoots() {
     return state.lens === "human"
       ? (view.human || []).map(item => ({ pv: item.line, metric: Math.round(item.probability * 100) + "%" }))
       : state.lens === "pro"
         ? (view.pro?.lines || view.candidates).slice(0, Math.max(view.candidates.length, 1))
-          .map(item => ({ pv: item.pv, metric: view.pro ? proMetric(item) : score(item) }))
-        : view.candidates.map(item => ({ pv: item.pv, metric: score(item) }));
+          .map(item => ({ pv: item.pv, metric: view.pro ? proMetric(item) : score(item), book: item.book }))
+        : view.candidates.map(item => ({ pv: item.pv, metric: score(item), book: item.book }));
   }
   function selectedRoot() {
     const moves = roots();
@@ -714,7 +723,14 @@ export function renderCompanion(container, board, view, actions = {}) {
       button.className = "candidate-choice move-row-choice";
       button.dataset.choice = row.key;
       button.dataset.focusKey = state.lens + ":" + row.key;
-      button.append(...moveVisual(row.sequence[actionPly()]), describe(row.metric, "score", "span"));
+      const visual = moveVisual(row.sequence[actionPly()]);
+      // Your repertoire move: name the opening instead of the route.
+      const route = row.book && !view.replyFocus ? visual[1]?.querySelector?.(".move-route") : null;
+      if (route) {
+        route.textContent = "Your opening · " + row.book;
+        button.dataset.book = "";
+      }
+      button.append(...visual, describe(row.metric, "score", "span"));
       list.append(button);
     }
     if (choices.length) stable.rows = choices.length;
@@ -895,7 +911,8 @@ export function renderCompanion(container, board, view, actions = {}) {
       : state.lens !== "human" && view.pending ? "Calculating with Stockfish…"
       : state.lens !== "human" && view.error ? view.error
       : state.lens === "human" ? (view.humanPending ? "Calculating with Maia-3…" : (view.humanModel || "Local model") + " · Likely moves")
-      : view.bullet ? "Bullet · One engine line"
+      : view.bullet && state.lens === "pro" ? (view.pro ? "Bullet · Human move" : "Bullet · Checking…")
+      : view.bullet ? "Bullet · Engine move"
       : state.lens === "pro" ? (view.proPending || !view.pro ? "Checking human moves with Stockfish…"
         : "Pro · " + proStyle(view.proStyle).label + " · " + (view.pro.model || "Human model"))
       : view.candidates.length ? "Stockfish 19 · Depth " + view.candidates[0].depth : "";

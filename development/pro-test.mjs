@@ -78,11 +78,12 @@ assert.equal(scripted.calls[0].count, board.moves().length);
 // Off mode and finished games never search.
 assert.equal(await findSafePremove(board, { analyze: scripted.analyze, mode: 'off' }), null);
 assert.equal(await findSafePremove(new Chess('7k/5QQ1/8/8/8/8/8/K7 b - - 0 1'), { analyze: scripted.analyze }), null);
-// A quiet best answer is not an "obvious" premove, but "safe" mode may accept it.
+// A quiet move that is best against every reply at no cost is the move you
+// would play anyway, so "obvious" mode accepts it too.
 const quiet = new Chess('4k3/8/8/8/8/8/8/R3K3 b - - 0 1');
 const quietEngine = async (position, { only }) => only ? [{ type: 'cp', value: 900, pv: [only] }]
   : position.moves({ verbose: true }).map(reply => ({ type: 'cp', value: -900, pv: [uciOf(reply), 'a1a7'] }));
-assert.equal(await findSafePremove(quiet, { analyze: quietEngine }), null);
+assert.equal((await findSafePremove(quiet, { analyze: quietEngine }))?.move, 'a1a7');
 assert.equal((await findSafePremove(quiet, { analyze: quietEngine, mode: 'safe' }))?.move, 'a1a7');
 // If the premove would be a blunder after some reply, nothing is shown.
 const risky = new Chess('3qk3/8/8/8/8/8/8/3QK3 b - - 0 1');

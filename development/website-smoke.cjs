@@ -97,17 +97,22 @@ try {
  const reaction=popup.locator('.cm-face img[src*=".gif?play="]');
  await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3P4/8/8/PPPP1PPP/RNBQKBNR',['e4','d5','exd5']));
  // Every move is in the feed, but the coach only reacts when a move matters.
- await popup.locator('.cm-say').filter({hasText:/d5|pawn/i}).first().waitFor();
+ await popup.locator('.cm-say').filter({hasText:/d5|pawn|Scandinavian/i}).first().waitFor();
  assert.equal(await reaction.count(),0);
  await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3p4/4P1Q1/8/PPPP1PPP/RNB1KBNR',['e4','d5','Qg4']));
  await popup.locator('.cm-face img[src*="-shocked.gif?play="]').waitFor();
  // After a few seconds it returns to idle.
  await popup.locator('.cm-face img[src*="-idle."]').waitFor({timeout:15000});
+ await popup.screenshot({path:'website-commentator.png',fullPage:true});
  await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR',['e4','d5']));
  await turn(popup,'White to move').waitFor();
  assert.equal(await rows(popup).count(),0);
  await popup.getByRole('radiogroup',{name:'Panel mode'}).getByRole('radio',{name:'Coach',exact:true}).click();
  await rows(popup).first().waitFor();
+ // Opening theory is graded Book, with the opening name.
+ await popup.locator('.grade-badge[data-tone="book"]').filter({hasText:'d5 · Book'}).waitFor();
+ await popup.waitForTimeout(1500);
+ await popup.screenshot({path:'website-coach-book.png',fullPage:true});
  const engineScores=await rows(popup).locator('.score').allTextContents();
  assert.deepEqual(engineScores.map(Number),engineScores.map(Number).sort((a,b)=>b-a));
  assert.equal(await rows(popup).first().locator('img.move-piece').count(),1);
@@ -127,7 +132,7 @@ try {
  await popup.getByRole('link',{name:'Settings',exact:true}).click();
  const settings=await settingsPage;
  await settings.getByRole('heading',{name:'Settings',exact:true}).waitFor();
- const commentator=settings.getByRole('radiogroup',{name:'Commentator'});
+ const commentator=settings.getByRole('radiogroup',{name:'Your coach'});
  assert.equal(await commentator.getByRole('radio').count(),5);
  const streamer=commentator.getByRole('radio',{name:'The Streamer, Kai',exact:true});
  await streamer.click();
@@ -143,7 +148,7 @@ try {
  await assertPressed(mode(popup,'Pro'),true);
  const help=popup.getByRole('button',{name:'How Pro works',exact:true});
  await help.click();
- await popup.getByText(/strongest move a human would really play/).waitFor();
+ await popup.getByText(/best move a human would really play/).waitFor();
  await help.click();
  await popup.getByText(/strongest move a human would really play/).waitFor({state:'hidden'});
  await popup.getByText(/^Pro · Balanced · /).waitFor();
@@ -153,18 +158,28 @@ try {
  // Settings: numeric depth slider and the human model section.
  const depthSlider=settings.getByRole('slider',{name:'Stockfish depth',exact:true});
  assert.equal(await depthSlider.inputValue(),'16');
- assert.equal(await setting(settings,'Pro style').count(),0);
- assert.equal(await settings.getByRole('radiogroup',{name:'Pro style'}).getByRole('radio').count(),3);
+ assert.equal(await settings.getByRole('slider',{name:'Pro balance',exact:true}).inputValue(),'45');
+ await settings.setViewportSize({width:900,height:900});
+ await settings.screenshot({path:'website-settings.png',fullPage:true});
+ // One level everywhere: the panel's level picker changes Settings too.
+ const level=popup.getByRole('combobox',{name:'Level',exact:true});
+ await level.selectOption('1500');
+ await settings.getByRole('radiogroup',{name:'Level from'}).getByRole('radio',{name:'My level'}).and(settings.locator('[aria-checked=true]')).waitFor();
+ assert.equal(await settings.getByRole('slider',{name:'Your level',exact:true}).inputValue(),'1500');
+ await popup.getByRole('combobox',{name:'Level',exact:true}).selectOption('page');
+ await settings.getByRole('radiogroup',{name:'Level from'}).getByRole('radio',{name:'From the game'}).and(settings.locator('[aria-checked=true]')).waitFor();
  assert.equal(await settings.getByRole('radiogroup',{name:'Safe premoves'}).getByRole('radio',{name:'Obvious'}).getAttribute('aria-checked'),'true');
  await popup.locator('button.board-player[data-color=b]').click();
  await popup.getByText(/^Replies after/).waitFor();
  await rows(popup).first().waitFor();
  await popup.locator('button.board-player[data-color=w]').click();
  await setSwitch(settings,'Bullet mode',true);
- await popup.getByText('Bullet · One engine line',{exact:true}).waitFor();
- await assertPressed(mode(popup,'Engine'),true);
+ // Bullet: one fast human move, checked by Stockfish.
+ await popup.getByText('Bullet · Human move',{exact:true}).waitFor();
+ await assertPressed(mode(popup,'Pro'),true);
  await count(rows(popup),1);
  await count(arrows,1);
+ await popup.screenshot({path:'website-bullet.png',fullPage:true});
  await setSwitch(settings,'Bullet mode',false);
  await count(rows(popup),3);
  const whiteScore = await popup.locator('.panel-evaluation .score').textContent();
@@ -198,13 +213,19 @@ try {
  await training.locator('[data-chess-studio-mark] g[data-kind="premove"][data-move="e1d1"]').waitFor({state:'attached'});
  // Coach mode also shows the coach's reaction to the last move.
  await popup.locator('.coach-react .cm-face img').waitFor();
- // An ordinary move: the coach just says something like "Hm."
- assert.match(await popup.locator('.coach-react-idle').textContent(),/^(Hm\.|Hmm…|Mm-hm\.|Ah\.|Hm, hm\.|Uh-huh\.|Okay\.|Mm\.)$/);
+ assert.ok((await popup.locator('.coach-react-bubble').textContent()).trim().length>0);
  await popup.waitForTimeout(1200);
  await popup.screenshot({path:'website-premove.png',fullPage:true});
  await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR',['e4','d5']));
  await turn(popup,'White to move').waitFor();
  assert.equal(await popup.locator('.premove-chip').count(),0);
+ // Your opening: its move comes first, named.
+ await setting(settings,'Your opening as White').selectOption('london');
+ await training.evaluate(()=>loadPosition('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR',[]));
+ await rows(popup).first().filter({hasText:'Your opening · London System'}).waitFor();
+ assert.equal(await rows(popup).first().getAttribute('data-choice'),'d2d4');
+ await popup.screenshot({path:'website-repertoire.png',fullPage:true});
+ await setting(settings,'Your opening as White').selectOption('');
  const panel=await context.newPage();
  await panel.setViewportSize({width:320,height:900});
  await panel.goto(base+'panel.html');
