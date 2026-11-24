@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.8.3 · 2026-11-24
+
+### Changed
+
+- Removed the Live / Analysis tag from the top of the panel.
+- The Selected move / All moves switch now spans the full width, like the Engine / Human / Pro switch above it, with centered labels.
+
 ## 1.8.2 · 2026-11-24
 
 ### Changed

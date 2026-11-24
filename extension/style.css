@@ -2220,3 +2220,10 @@ button.info-button[aria-expanded="true"] { color: var(--blue); background: var(-
 .coach-react:not([data-speaking]) .coach-react-bubble { background: transparent; border-style: dashed; }
 .coach-react:not([data-speaking]) .coach-react-bubble::before { display: none; }
 .coach-react:not([data-speaking]) .coach-react-figure { opacity: .85; }
+
+/* ---------- v1.8.3: Selected move / All moves spans the full width ---------- */
+.move-controls > .move-control-group + .move-control-group {
+  grid-column: 1 / -1; display: flex; width: 100%; box-sizing: border-box;
+}
+.move-controls > .move-control-group + .move-control-group button { flex: 1 1 0; justify-content: center; text-align: center; }
+.move-controls > button.arrow-switch { grid-column: 1 / -1; justify-self: start; }

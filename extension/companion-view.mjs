@@ -413,15 +413,6 @@ export function renderCompanion(container, board, view, actions = {}) {
   const sideToMove = turn === "w" ? "White to move" : "Black to move";
   const header = document.createElement("header");
   header.className = "position-heading";
-  const source = document.createElement("p");
-  source.className = "position-source";
-  if (isWebsite) {
-    source.dataset.live = "";
-    const status = view.analysis ? "Analysis" : "Live";
-    source.title = view.analysis ? "Following an analysis board" : "Following a live game";
-    if (view.analysis) source.dataset.analysis = "";
-    source.append(describe("", "live-dot", "span"), describe(status, "live-label", "span"));
-  }
   const title = describe(view.terminal || sideToMove, "companion-heading", "h1");
   if (!view.terminal) title.dataset.turn = turn;
   const turnRow = document.createElement("div");
@@ -433,7 +424,7 @@ export function renderCompanion(container, board, view, actions = {}) {
     if (mine) owner.dataset.mine = "";
     turnRow.append(owner);
   }
-  header.append(turnRow, source);
+  header.append(turnRow);
   if (view.myGrade || view.oppGrade) {
     const progress = document.createElement("div");
     progress.className = "game-progress";
