@@ -40,12 +40,7 @@ const ENGINE_REPLIES = 3;
 // certain: your account name matches a player, or the board still shows your
 // side at the bottom as when the game started. A flipped board or an unknown
 // side would otherwise turn the opponent's best move into a "premove".
-//
-// Premoves are offered only in games against a computer. Chess.com and Lichess
-// forbid move suggestions during a live game against a person, and a premove is
-// only useful during a live game.
 export function premoveAllowed(view, board) {
-  if (!view.opponentBot) return false;
   if (!view.playerColor || view.analysis || board.turn() === view.playerColor) return false;
   if (view.playerSource === "account") return true;
   return view.playerSource === "orientation" && view.playerColor === (view.flipped ? "b" : "w");

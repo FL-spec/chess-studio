@@ -938,7 +938,7 @@ function renderSettings() {
     "bulletStyle", recommended([["human", "Human"], ["engine", "Engine"]], "human"), siteValues, saveSite("bulletStyle"));
 
   const openingsGroup = group("Premoves & openings", "arrows");
-  control(openingsGroup, "Safe premoves", "In games against the computer, a green arrow shows a premove that stays safe against the likely and forcing replies. Chess.com and Lichess forbid move help in games against people, so premoves are not shown there.",
+  control(openingsGroup, "Safe premoves", "A green arrow shows a premove that stays safe against the likely and forcing replies.",
     "premoves", recommended([["obvious", "Obvious"], ["safe", "All safe"], ["off", "Off"]], "obvious"), siteValues, saveSite("premoves"));
   const openingChoices = (side, first) => recommended([["", "Any"],
     ...OPENINGS.filter((item) => item.side === side && (!first || item.moves.startsWith(first)))

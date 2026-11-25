@@ -110,17 +110,16 @@ assert.equal(await findSafePremove(risky, { analyze: riskyEngine, mode: 'safe' }
 const controller = new AbortController();
 controller.abort();
 await assert.rejects(findSafePremove(board, { analyze: scripted.analyze, weights, signal: controller.signal }), { name: 'AbortError' });
-// Premoves: only on the opponent's turn, only in games against a computer,
-// and only when your side is certain.
+// Premoves: only on the opponent's turn, in any game, and only when your side is certain.
 {
   const { premoveAllowed } = await import("../extension/premove.mjs");
   const { Chess } = await import("../extension/vendor/chess.mjs");
   const blackToMove = new Chess("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
   const whiteToMove = new Chess();
-  const base = { opponentBot: true, playerColor: "w", playerSource: "account", flipped: false };
+  const base = { playerColor: "w", playerSource: "account", flipped: false };
   assert.equal(premoveAllowed(base, blackToMove), true);
   assert.equal(premoveAllowed(base, whiteToMove), false, "your turn: no premove");
-  assert.equal(premoveAllowed({ ...base, opponentBot: false }, blackToMove), false, "human opponent: no premove");
+  assert.equal(premoveAllowed({ ...base, opponentBot: false }, blackToMove), true, "human opponent: premove allowed");
   assert.equal(premoveAllowed({ ...base, playerColor: undefined }, blackToMove), false, "unknown side");
   assert.equal(premoveAllowed({ ...base, analysis: true }, blackToMove), false, "analysis board");
   // Side from orientation: allowed only while the board still shows your side at the bottom.

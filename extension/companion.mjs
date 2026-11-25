@@ -460,7 +460,6 @@ async function followWebsite() {
         username: websiteOptions.username || "",
         playerColor: observation.playerColor,
         playerSource: observation.playerSource,
-        opponentBot: Boolean(observation.opponentBot),
         ratings: observation.ratings,
         modelRatings,
         proStyle: proSetting(websiteOptions),

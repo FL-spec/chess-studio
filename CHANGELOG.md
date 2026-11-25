@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.14.2 · 2026-11-25
+
+### Changed
+
+- **Premoves are back in every game.** 1.14.1 limited premoves to games against a computer. That rule is removed: premoves appear again in all live games, as in 1.14.0. The other 1.14.1 premove fixes stay (your side only, the opponent's top engine replies always checked, stricter "Obvious" premoves).
+
 ## 1.14.1 · 2026-11-25
 
 ### Fixed

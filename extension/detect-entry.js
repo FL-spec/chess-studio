@@ -132,15 +132,7 @@
     // How your side is known: your account name ("account") or the board
     // orientation when the game started ("orientation").
     const playerSource = match ? "account" : playerColor ? "orientation" : undefined;
-    // Games against a computer: Chess.com's bot and coach pages, or a Lichess
-    // opponent that is Stockfish or carries the BOT title. Both sites allow
-    // assistance only in such games, so premoves are offered only there.
-    const botName = (value) => /\bstockfish\b|\bBOT\b/.test(value || "");
-    const lichessBot = lichess && Boolean(
-      document.querySelector(".ruser-top .utitle[data-bot], .ruser-bottom .utitle[data-bot]") ||
-      botName(text(".ruser-top")) || botName(text(".ruser-bottom")));
-    const opponentBot = practiceSite || lichessBot;
-    return { names, ratings, playerColor, playerSource, opponentBot };
+    return { names, ratings, playerColor, playerSource };
   }
   function pageBoard() {
     return document.querySelector(
