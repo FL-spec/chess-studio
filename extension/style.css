@@ -2268,8 +2268,15 @@ select.level-select[hidden] { display: none; }
 }
 .companion .brand .settings-icon:hover { background: var(--paper); box-shadow: 0 1px 3px #101d3424; }
 .companion .brand .settings-icon svg { width: 20px; height: 20px; }
-.companion .view-toggle { padding: 4px; border: 1px solid var(--rule); }
-.companion .view-toggle button { min-height: 38px; font-size: 15px; color: color-mix(in srgb, var(--ink) 70%, transparent); }
+/* Coach / Commentator: a small, clean pill switch. */
+.companion .view-toggle {
+  display: inline-flex; width: auto; align-self: flex-start; margin: 0 0 10px; padding: 2px; gap: 0;
+  border-radius: 999px; border: 1px solid var(--rule); background: var(--rail);
+}
+.companion .view-toggle button {
+  flex: 0 0 auto; min-height: 28px; padding: 2px 14px; border-radius: 999px;
+  font-size: 13px; font-weight: 700; color: var(--muted);
+}
 .companion .view-toggle button[aria-checked="true"] {
-  background: var(--primary, #0b0b0f); color: var(--onprimary, #fff); box-shadow: 0 1px 3px #0b0b0f33;
+  background: var(--primary, #0b0b0f); color: var(--onprimary, #fff); box-shadow: none;
 }
