@@ -60,11 +60,13 @@ try {
  popup.on('pageerror',e=>errors.push(e.message));
  const rows=page=>page.locator('.move-row-choice');
  const mode=(page,name)=>page.getByRole('group',{name:'Analysis mode'}).getByRole('button',{name,exact:true});
- const turn=(page,name)=>page.getByRole('heading',{name,exact:true});
+ // The heading says "Your turn" when your side is known: check the side to move.
+ const turn=(page,name)=>page.locator('h1.companion-heading[data-turn="'+(name.startsWith('White')?'w':'b')+'"]');
  const arrows=training.locator('[data-chess-studio-mark] g[data-move]');
  const engineArrow=training.locator('[data-chess-studio-mark] g[data-kind="move"]');
  const replyArrow=training.locator('[data-chess-studio-mark] g[data-kind="reply"]');
  const count=async (locator,n)=>{await locator.nth(n-1).waitFor({state:"attached"});assert.equal(await locator.count(),n);};
+ const settingsTab=(page,name)=>page.getByRole('tab',{name,exact:true}).click();
  const setting=(page,name)=>page.getByRole('combobox',{name,exact:true});
  const toggle=(page,name)=>page.getByRole('switch',{name,exact:true});
  const setSwitch=async (page,name,on)=>{const item=toggle(page,name);if((await item.getAttribute('aria-checked'))!==String(on))await item.click();};
@@ -132,6 +134,7 @@ try {
  await popup.getByRole('link',{name:'Settings',exact:true}).click();
  const settings=await settingsPage;
  await settings.getByRole('heading',{name:'Settings',exact:true}).waitFor();
+ await settingsTab(settings,'Appearance');
  const commentator=settings.getByRole('radiogroup',{name:'Your coach'});
  assert.equal(await commentator.getByRole('radio').count(),5);
  const streamer=commentator.getByRole('radio',{name:'The Streamer, Kai',exact:true});
@@ -156,10 +159,12 @@ try {
  // Pro rows show the evaluation and, for human moves, how often players choose them.
  assert.match(await rows(popup).first().locator('.score').textContent(),/^[+-]?\d+\.\d\d( · \d+%)?$/);
  // Settings: numeric depth slider and the human model section.
+ await settingsTab(settings,'Settings');
  const depthSlider=settings.getByRole('slider',{name:'Stockfish depth',exact:true});
  assert.equal(await depthSlider.inputValue(),'16');
  assert.equal(await settings.getByRole('slider',{name:'Pro balance',exact:true}).inputValue(),'45');
  await settings.setViewportSize({width:900,height:900});
+ await settings.waitForTimeout(400);
  await settings.screenshot({path:'website-settings.png',fullPage:true});
  // One level everywhere: the panel's level picker changes Settings too.
  const level=popup.getByRole('combobox',{name:'Level',exact:true});
@@ -183,6 +188,7 @@ try {
  await setSwitch(settings,'Bullet mode',false);
  await count(rows(popup),3);
  const whiteScore = await popup.locator('.panel-evaluation .score').textContent();
+ await settingsTab(settings,'Appearance');
  await setSwitch(settings,'Pop-out and pinned evaluation bar',false);
  await evaluation.waitFor({state:'hidden'});
  await setSwitch(settings,'Pop-out and pinned evaluation bar',true);
@@ -220,6 +226,7 @@ try {
  await turn(popup,'White to move').waitFor();
  assert.equal(await popup.locator('.premove-chip').count(),0);
  // Your opening: its move comes first, named.
+ await settingsTab(settings,'Settings');
  await setting(settings,'Your opening as White').selectOption('london');
  await training.evaluate(()=>loadPosition('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR',[]));
  await rows(popup).first().filter({hasText:'Your opening · London System'}).waitFor();
@@ -284,6 +291,7 @@ try {
  await training.locator('wc-chess-board').evaluate(board=>board.classList.add('flipped'));
  await studio.locator('.board-player[data-color="b"]').and(studio.locator('[title*="You · Black"]')).waitFor();
  assert.equal(await studio.locator('.position-board .square').first().getAttribute('data-square'),'h1');
+ await settingsTab(settings,'Appearance');
  await setting(settings,'Board arrows follow').selectOption('turn');
  await mode(studio,'Human').click();
  await studio.locator('button.board-player[data-color=w]').click();

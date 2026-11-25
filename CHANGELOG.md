@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.12.0 · 2026-11-25
+
+### Added
+
+- **Your username** in Settings (Analysis). Type your Chess.com or Lichess name, and Chess Studio always knows which side is yours, even on a flipped board. Leave it empty to find it automatically.
+- **Settings and Appearance tabs.** Settings is split in two, so the page is shorter. Appearance holds Board & arrows, Coaching and Appearance.
+
+### Changed
+
+- **"You" on your card.** Your player card says "You". The other card shows your opponent's name.
+- **One heading.** "White to move" plus a "Your turn" tag is now one line: "Your turn · White" or "Opponent's turn · Black". Without a known side, it still says "White to move".
+
 ## 1.11.0 · 2026-11-25
 
 ### Changed

@@ -48,8 +48,15 @@
   }
   // Your account name: read from the site's own menus and remembered, so it
   // still works on pages where the menu is collapsed or missing.
-  const accounts = (await chrome.storage.local.get("accounts")).accounts || {};
+  const stored = await chrome.storage.local.get(["accounts", "websiteOptions"]);
+  const accounts = stored.accounts || {};
+  // A username typed in Settings always wins.
+  let typedName = (stored.websiteOptions?.username || "").toLowerCase();
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.websiteOptions) typedName = (changes.websiteOptions.newValue?.username || "").toLowerCase();
+  });
   function accountName(lichess) {
+    if (typedName) return typedName;
     const key = lichess ? "lichess" : "chesscom";
     let name = "";
     if (lichess) name = document.querySelector("#user_tag")?.textContent.trim() || "";

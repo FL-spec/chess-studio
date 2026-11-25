@@ -1,5 +1,7 @@
 export const websiteDefaults = {
   enabled: true,
+  // Your Chess.com or Lichess name ("" = found automatically).
+  username: "",
   bullet: false,
   arrows: true,
   arrowSide: "preview",

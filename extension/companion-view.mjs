@@ -382,7 +382,8 @@ function playerLabel(view, color, toMove, onClick) {
   player.title = (name || role) + " · " + (role !== side ? role + " · " : "") + side;
   // One line only: the name (or You / Opponent). The chip shows the colour,
   // and you are always on the left; the tooltip has the details.
-  player.append(describe("", "board-player-chip", "span"), describe(name || role, "board-player-name", "strong"));
+  player.append(describe("", "board-player-chip", "span"),
+    describe(role === "You" ? "You" : name || role, "board-player-name", "strong"));
   return player;
 }
 
@@ -405,17 +406,16 @@ export function renderCompanion(container, board, view, actions = {}) {
   const sideToMove = turn === "w" ? "White to move" : "Black to move";
   const header = document.createElement("header");
   header.className = "position-heading";
-  const title = describe(view.terminal || sideToMove, "companion-heading", "h1");
+  // When your side is known: "Your turn" / "Opponent’s turn", plus your colour.
+  const known = isWebsite && view.playerColor && !view.terminal;
+  const mine = known && turn === view.playerColor;
+  const sideName = turn === "w" ? "White" : "Black";
+  const headingText = view.terminal || (known ? (mine ? "Your turn" : "Opponent’s turn") + " · " + sideName : sideToMove);
+  const title = describe(headingText, "companion-heading", "h1");
   if (!view.terminal) title.dataset.turn = turn;
   const turnRow = document.createElement("div");
   turnRow.className = "turn-row";
   turnRow.append(title);
-  if (isWebsite && view.playerColor && !view.terminal) {
-    const mine = turn === view.playerColor;
-    const owner = describe(mine ? "Your turn" : "Opponent’s turn", "turn-owner", "span");
-    if (mine) owner.dataset.mine = "";
-    turnRow.append(owner);
-  }
   header.append(turnRow);
   if (view.myGrade || view.oppGrade) {
     const progress = document.createElement("div");

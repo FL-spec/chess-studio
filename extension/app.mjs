@@ -699,9 +699,35 @@ const SETTING_ICONS = {
   practice: "M7 17h6M8 14h4l1-6H7zM10 3v2M8 5h4",
   human: "M10 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 17c0-3.3 2.7-6 6-6s6 2.7 6 6",
 };
+// Settings has two tabs, so the page stays short: Settings and Appearance.
+let settingsTab = "settings";
+const APPEARANCE_GROUPS = new Set(["Board & arrows", "Coaching", "Appearance"]);
 function renderSettings() {
   const box = $("extra");
   box.replaceChildren();
+  const tabs = document.createElement("div");
+  tabs.className = "segmented settings-tabs";
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "Settings sections");
+  for (const [value, title] of [["settings", "Settings"], ["appearance", "Appearance"]]) {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.setAttribute("role", "tab");
+    tab.dataset.tab = value;
+    tab.textContent = title;
+    tab.setAttribute("aria-selected", String(value === settingsTab));
+    tab.setAttribute("aria-checked", String(value === settingsTab));
+    tab.onclick = () => {
+      settingsTab = value;
+      for (const other of tabs.children) {
+        other.setAttribute("aria-selected", String(other === tab));
+        other.setAttribute("aria-checked", String(other === tab));
+      }
+      for (const section of box.querySelectorAll(".settings-group")) section.hidden = section.dataset.tab !== value;
+    };
+    tabs.append(tab);
+  }
+  box.append(tabs);
   const siteValues = { ...websiteDefaults, ...websiteOptions };
   if (siteValues.lens === "compare") siteValues.lens = "engine";
   const saveSite = (key) => async () => {
@@ -716,6 +742,8 @@ function renderSettings() {
   function group(title, icon, intro) {
     const section = document.createElement("section");
     section.className = "settings-group";
+    section.dataset.tab = APPEARANCE_GROUPS.has(title) ? "appearance" : "settings";
+    section.hidden = section.dataset.tab !== settingsTab;
     const heading = document.createElement("h2");
     heading.innerHTML = '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="' + SETTING_ICONS[icon] + '"/></svg>';
     heading.append(title);
@@ -824,11 +852,40 @@ function renderSettings() {
     row.append(text, field);
     section.append(row);
   }
+  // A short text setting, saved when you leave the field or press Enter.
+  function textField(section, caption, help, key, placeholder, current, save) {
+    const row = document.createElement("div");
+    row.className = "setting-row";
+    const id = "setting-" + key + "-" + section.childElementCount;
+    const text = document.createElement("div");
+    text.className = "setting-text";
+    const name = document.createElement("label");
+    name.htmlFor = id;
+    name.textContent = caption;
+    text.append(name, label(help, "setting-help"));
+    const input = document.createElement("input");
+    input.type = "text";
+    input.id = id;
+    input.className = "setting-text-input";
+    input.placeholder = placeholder;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.value = current[key] || "";
+    input.onchange = () => {
+      current[key] = input.value.trim().replace(/^@/, "");
+      input.value = current[key];
+      save();
+    };
+    row.append(text, input);
+    section.append(row);
+  }
   const prefs = () => [settings, savePreferences];
 
   const analysis = group("Analysis", "analysis", "Stockfish 19 runs on your computer. Nothing leaves your browser.");
   control(analysis, "Live analysis", "Analyse your Chess.com and Lichess games.",
     "enabled", [[true, "On"], [false, "Off"]], siteValues, saveSite("enabled"));
+  textField(analysis, "Your username", "Your Chess.com or Lichess name. Chess Studio then always knows which side is yours. Leave it empty to find it automatically.",
+    "username", "Found automatically", siteValues, saveSite("username"));
   control(analysis, "Default mode", "Engine: strongest. Human: most played. Pro: strongest human move.",
     "lens", recommended([["engine", "Engine"], ["human", "Human"], ["pro", "Pro"]], "engine"), siteValues, saveSite("lens"));
   control(analysis, "Candidate moves", "How many moves to list.",

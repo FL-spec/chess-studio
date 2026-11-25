@@ -2344,3 +2344,15 @@ body[data-commentator] footer { background: var(--paper); backdrop-filter: none;
   transform: rotate(45deg);
 }
 .cm-item .cm-example { margin: 6px 0 0 14px; font-size: 14px; color: var(--muted); }
+
+/* Settings text field, same height and shape as the selects. */
+input.setting-text-input {
+  justify-self: stretch; min-width: 0; min-height: 36px; padding: 6px 12px; border-radius: 10px;
+  border: 1px solid var(--rule); background: var(--paper); color: var(--ink); font: inherit; font-size: 14px;
+}
+input.setting-text-input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Settings tabs: Settings | Appearance. */
+.settings-tabs { max-width: 320px; margin: 0 0 20px; }
+.settings-tabs button { min-height: 36px; font-size: 14px; }
+.settings-group[hidden] { display: none; }
