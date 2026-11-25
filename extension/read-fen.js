@@ -25,12 +25,18 @@
       /* Move history remains available when the board API changes. */
     }
   }
+  // Background tabs skip the read; the tab reads once when it is shown again.
   const timer = setInterval(() => {
     if (window.__chessStudioFenReader !== readerVersion) {
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", onShow);
       return;
     }
-    read();
+    if (!document.hidden) read();
   }, 350);
+  function onShow() {
+    if (!document.hidden) read();
+  }
+  document.addEventListener("visibilitychange", onShow);
   read();
 })();

@@ -96,15 +96,15 @@ try {
  await popup.locator('.cm-face img[src$=".webp"]').waitFor();
  await popup.emulateMedia({reducedMotion:'no-preference'});
  await popup.locator('.cm-face img[src*=".gif"]').waitFor();
- const reaction=popup.locator('.cm-face img[src*=".gif?play="]');
+ const reaction=popup.locator('.cm-face img[data-replay]');
  await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3P4/8/8/PPPP1PPP/RNBQKBNR',['e4','d5','exd5']));
  // Every move is in the feed, but the coach only reacts when a move matters.
  await popup.locator('.cm-say').filter({hasText:/d5|pawn|Scandinavian/i}).first().waitFor();
  assert.equal(await reaction.count(),0);
  await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3p4/4P1Q1/8/PPPP1PPP/RNB1KBNR',['e4','d5','Qg4']));
- await popup.locator('.cm-face img[src*="-shocked.gif?play="]').waitFor();
+ await popup.locator('.cm-face img[data-replay][data-face$="-shocked.gif"][src^="blob:"]').waitFor();
  // After a few seconds it returns to idle.
- await popup.locator('.cm-face img[src*="-idle."]').waitFor({timeout:15000});
+ await popup.locator('.cm-face img[data-face*="-idle."]').waitFor({timeout:15000});
  await popup.screenshot({path:'website-commentator.png',fullPage:true});
  await training.evaluate(()=>loadPosition('rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR',['e4','d5']));
  await turn(popup,'White to move').waitFor();
@@ -141,7 +141,7 @@ try {
  await streamer.click();
  assert.equal(await streamer.getAttribute('aria-checked'),'true');
  await popup.getByRole('radiogroup',{name:'Panel mode'}).getByRole('radio',{name:'Commentator',exact:true}).click();
- await popup.locator('.cm-face img[src^="coaches/kai-"]').waitFor();
+ await popup.locator('.cm-face img[data-face^="coaches/kai-"]').waitFor();
  await popup.getByRole('radiogroup',{name:'Panel mode'}).getByRole('radio',{name:'Coach',exact:true}).click();
  assert.equal(await toggle(settings,'Automatic board arrows').getAttribute('aria-checked'),'true');
  assert.equal(await setting(settings,'Board arrows follow').inputValue(),'preview');

@@ -148,10 +148,14 @@ export function latestReaction(history, window = 2) {
 const MOODS = new Set(["idle", "delighted", "happy", "thinking", "worried", "shocked"]);
 
 /** Image markup for a commentator in a mood. */
-export function coachPortrait(id, mood = "idle", { animated = false, replay = 0 } = {}) {
+// Image file and label of a coach's face for a mood.
+export function coachFace(id, mood = "idle", animated = false) {
   const coach = COACHES.find((item) => item.id === id) || COACHES[0];
   const face = MOODS.has(mood) ? mood : "idle";
-  const extension = animated ? ".gif" + (replay ? "?play=" + replay : "") : ".webp";
-  return '<img src="coaches/' + coach.id + "-" + face + extension + '" alt="' + coach.name + ", " + face +
+  return { src: "coaches/" + coach.id + "-" + face + (animated ? ".gif" : ".webp"), alt: coach.name + ", " + face };
+}
+export function coachPortrait(id, mood = "idle", { animated = false, replay = 0 } = {}) {
+  const { src, alt } = coachFace(id, mood, animated);
+  return '<img src="' + src + (animated && replay ? "?play=" + replay : "") + '" alt="' + alt +
     '" width="160" height="160" draggable="false">';
 }

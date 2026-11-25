@@ -271,13 +271,17 @@ async function predictHuman(board, options, signal, skipMaia, ratings) {
 async function computePro(board, options, signal, engineLines, ratings, skipMaia) {
   const human = await predictHuman(board, options, signal, skipMaia, ratings);
   const known = new Set(engineLines.map(line => line.pv[0]));
-  const extra = [];
-  for (const { move } of humanCandidates(human.ranks)) {
-    const id = move.from + move.to + (move.promotion || "");
-    if (known.has(id)) continue;
+  // All missing candidates in one restricted MultiPV search: one worker and a
+  // shared hash, instead of one full search per move.
+  const missing = humanCandidates(human.ranks)
+    .map(({ move }) => move.from + move.to + (move.promotion || ""))
+    .filter(id => !known.has(id));
+  let extra = [];
+  if (missing.length) {
     signal?.throwIfAborted();
-    const [line] = await analyze(board, { depth: options.depth, count: 1, only: id, signal });
-    if (line?.pv[0] === id) extra.push({ ...line, searched: true });
+    const wanted = new Set(missing);
+    const lines = await analyze(board, { depth: options.depth, count: missing.length, only: missing.join(" "), signal });
+    extra = lines.filter(line => wanted.has(line?.pv[0])).map(line => ({ ...line, searched: true }));
   }
   const ranked = rankPro([...engineLines, ...extra], human.ranks, proSetting(options));
   return { ...ranked, model: human.model, outcome: human.outcome };
@@ -592,7 +596,11 @@ async function followWebsite() {
       if (!view.bullet) gradeMoveOf(view);
     }
   }
-  timer = setTimeout(() => followWebsite().catch(showError), 450);
+  // Chess.com and Lichess boards send "chess-studio-board-changed" on every
+  // change, so a found game only needs a slow safety poll. Searching for a
+  // board, or a generic page without change events, keeps the fast poll.
+  const evented = observation?.status === "ready" && !observation.generic;
+  timer = setTimeout(() => followWebsite().catch(showError), evented ? 1500 : 450);
 }
 // Safe premove while the opponent thinks (see premove.mjs). The check uses a
 // shallower search than the panel so it is ready within the opponent's move.

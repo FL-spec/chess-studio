@@ -160,14 +160,32 @@ export function drawBoard(
   const animateMove = last && last.before === element.dataset.position &&
     last.after === board.fen() && element.dataset.flipped === String(Boolean(flipped)) &&
     (window.matchMedia("(prefers-reduced-motion: no-preference)").matches && document.documentElement.dataset.motion !== "reduced");
+  // Display-only boards (no click or drag) redraw many times per second while
+  // the engine searches: keep their squares and rebuild only those whose piece
+  // or highlight changed. Other children (arrow overlays) are removed as before.
+  const mode = onSquare || onDrop ? "interactive" : "static";
+  const cells = mode === "static" && element.dataset.mode === "static" &&
+    element.dataset.flipped === String(Boolean(flipped))
+    ? [...element.children].filter((child) => child.classList.contains("square"))
+    : [];
+  const reuse = cells.length === 64;
   element.dataset.position = board.fen();
   element.dataset.flipped = String(Boolean(flipped));
+  element.dataset.mode = mode;
   const focused = document.activeElement?.dataset.square;
-  element.replaceChildren();
+  if (reuse) {
+    for (const child of [...element.children])
+      if (!child.classList.contains("square")) child.remove();
+  } else element.replaceChildren();
   const order = flipped ? [...squareList].reverse() : squareList;
   for (const [index, square] of order.entries()) {
-    const cell = document.createElement(onSquare ? "button" : "div");
     const piece = board.get(square);
+    const sig = (piece ? piece.color + piece.type : "-") +
+      (last?.from === square || last?.to === square ? "l" : "") +
+      (selected === square ? "s" : "") + (targets.includes(square) ? "t" : "");
+    if (reuse && cells[index].dataset.sig === sig) continue;
+    const cell = document.createElement(onSquare ? "button" : "div");
+    cell.dataset.sig = sig;
     cell.className =
       "square " +
       ((files.indexOf(square[0]) + Number(square[1])) % 2 ? "dark" : "light");
@@ -251,7 +269,8 @@ export function drawBoard(
         cell.append(file);
       }
     }
-    element.append(cell);
+    if (reuse) cells[index].replaceWith(cell);
+    else element.append(cell);
   }
   if (animateMove) {
     const from = element.querySelector('[data-square="' + last.from + '"]').getBoundingClientRect();

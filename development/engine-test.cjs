@@ -41,11 +41,15 @@ try {
     out.otherSurvives=(await p2).length===3;
     const d=new Chess();d.move('Nf3');
     out.afterAbort=(await analyze(d,{depth:8})).length===3;
+    // Several restricted moves in one MultiPV search (Pro candidates).
+    const only=await analyze(new Chess(),{depth:8,count:3,only:'a2a3 h2h3 b1a3'});
+    out.onlyMany=only.length===3&&new Set(only.map(l=>l.pv[0])).size===3&&only.every(l=>['a2a3','h2h3','b1a3'].includes(l.pv[0]));
     out.spawnedTotal=spawned;
     out.reference=JSON.stringify(await analyze(new Chess('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3'),{depth:14,count:3}));
     return out;
   });
   console.log({...r,reference:undefined});
+  assert.equal(r.onlyMany,true);
   assert.equal(r.shared,true);assert.equal(r.spawnedShared,1);assert.ok(r.progress>=8);
   assert.equal(r.cacheCopy,true);assert.equal(r.spawnedCache,1);
   assert.equal(r.abortRejects,true);assert.equal(r.longAbort,true);assert.equal(r.otherSurvives,true);assert.equal(r.afterAbort,true);

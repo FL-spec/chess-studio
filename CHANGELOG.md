@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.13.1 · 2026-11-25
+
+### Changed
+
+- **Pro checks human moves in one search.** The likely human moves that Stockfish did not already list are now searched together in one restricted multi-line search, instead of one full search per move.
+- **Less polling on Chess.com and Lichess.** Once the panel follows a game, it relies on the page's board-change events and checks the tab every 1.5 s as a safety net (was every 450 ms). Pages without change events keep the fast check.
+- **Background tabs stay quiet.** The Chess.com board reader skips its work while the tab is hidden and reads once when the tab is shown again.
+- **Faster board redraws.** Display-only boards keep their squares and redraw only the ones whose piece or highlight changed. Boards you click or drag still redraw in full.
+- **Coach reactions load once.** Each reaction GIF (300-400 KB) is read from disk once and kept in memory; later reactions replay it from memory. A face that is already shown is not rebuilt.
+
 ## 1.13.0 · 2026-11-25
 
 ### Added

@@ -111,7 +111,10 @@ export function analyze(board, options = {}) {
   const history = board.history({ verbose: true });
   const start = history[0]?.before || board.fen();
   const command = "position fen " + start + (history.length ? " moves " + history.map(uci).join(" ") : "");
-  const expected = options.only ? 1 : Math.min(options.count ?? 3, board.moves().length);
+  // `only` restricts the search to one or more space-separated UCI moves.
+  const expected = options.only
+    ? Math.min(options.only.trim().split(/\s+/).length, board.moves().length)
+    : Math.min(options.count ?? 3, board.moves().length);
   return remoteAvailable() ? analyzeRemote(command, expected, options) : analyzeCommand(command, expected, options);
 }
 

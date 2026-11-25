@@ -4,7 +4,7 @@ import { drawBoard, explain, moveVisual } from "./chess-view.mjs";
 import { spokenName } from "./book.mjs";
 import { Chess } from "./vendor/chess.mjs";
 import { score, uci } from "./engine.mjs";
-import { coachLine, coachPortrait, coachSound, latestReaction } from "./coaches.mjs";
+import { coachFace, coachLine, coachSound, latestReaction } from "./coaches.mjs";
 import { proLines, proMetric, proStyle } from "./pro-lines.mjs";
 import { moveAccuracy } from "./gamify.mjs";
 import { leavesBullet } from "./website-preferences.mjs";
@@ -97,7 +97,21 @@ if (globalThis.document && document.body?.classList.contains("website")) {
     currentStep(event.key === "ArrowLeft" ? -1 : 1);
   });
 }
-let portraitReplay = 0;
+// Reaction GIFs (300-400 KB each) are read once and kept as blobs. A reaction
+// replays the GIF from a fresh blob URL, so it starts from its first frame
+// without reading the file again.
+const portraitBlobs = new Map();
+function portraitBlob(src) {
+  if (!portraitBlobs.has(src)) {
+    const pending = fetch(src).then(response => {
+      if (!response.ok) throw Error(response.statusText);
+      return response.blob();
+    });
+    pending.catch(() => portraitBlobs.delete(src));
+    portraitBlobs.set(src, pending);
+  }
+  return portraitBlobs.get(src);
+}
 const reducedMotion = () => document.documentElement.dataset.motion === "reduced" ||
   matchMedia("(prefers-reduced-motion: reduce)").matches;
 function animate(element, keyframes, options) {
@@ -132,18 +146,39 @@ async function setMood(state, mood, moveKey) {
       state.moveKey === moveKey && state.animated === animated) return;
   Object.assign(state, { mood, coach: coachId, moveKey, animated });
 
-  const face = document.createElement("div");
-  face.className = "cm-face";
-  const replay = animated && mood !== "idle" ? ++portraitReplay : 0;
-  face.innerHTML = coachPortrait(coachId, mood, { animated, replay });
-  state.pendingFace = face;
-  try {
-    await face.firstElementChild.decode();
-  } catch {
+  const { src, alt } = coachFace(coachId, mood, animated);
+  const replay = animated && mood !== "idle";
+  // A still or idle face that is already shown stays as it is.
+  if (!replay && state.faceSrc === src) {
+    state.pendingFace = null;
+    state.root.dataset.mood = mood;
     return;
   }
-  if (state.pendingFace !== face) return;
-
+  const face = document.createElement("div");
+  face.className = "cm-face";
+  const image = new Image(160, 160);
+  image.alt = alt;
+  image.draggable = false;
+  image.dataset.face = src;
+  if (replay) image.dataset.replay = "";
+  face.append(image);
+  state.pendingFace = face;
+  let url = src;
+  try {
+    if (replay) url = URL.createObjectURL(await portraitBlob(src));
+    if (state.pendingFace !== face) throw Error("stale");
+    image.src = url;
+    await image.decode();
+  } catch {
+    if (url !== src) URL.revokeObjectURL(url);
+    return;
+  }
+  if (state.pendingFace !== face) {
+    if (url !== src) URL.revokeObjectURL(url);
+    return;
+  }
+  if (state.faceUrl && state.faceUrl !== state.faceSrc) URL.revokeObjectURL(state.faceUrl);
+  Object.assign(state, { faceSrc: replay ? null : src, faceUrl: url });
   state.figure.replaceChildren(face);
   state.root.dataset.mood = mood;
 }
