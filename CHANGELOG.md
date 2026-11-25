@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.14.1 · 2026-11-25
+
+### Fixed
+
+- **No more premoves for the wrong side.** A premove is computed only when your side is certain: your account name matches a player, or the board still shows your side at the bottom as when the game started. A flipped board or an unknown side used to turn the opponent's best move (taking your piece, or a check against your king) into a "premove". The panel also drops any premove that does not move your own piece, and the page never draws a premove on your turn.
+- **Premoves no longer miss the opponent's best reply.** The opponent's top three Stockfish replies are always checked, however unlikely the human model rates them. Before, a premove such as Qg6+ could be shown although the engine's best reply Kf7 wins the queen.
+- **"Obvious" premoves are stricter.** They may lose at most 2% expected score against any checked reply (was 4%); "All safe" keeps 4%.
+
+### Changed
+
+- **Premoves only in games against a computer.** Chess.com and Lichess forbid move help during live games against people, and a premove only helps during a live game. Premoves now appear on Chess.com's bot and coach pages and in Lichess games against Stockfish or a BOT account. Settings says so.
+
+### Tests
+
+- New premove stress test (`development/premove-stress.cjs`): 772 positions from seeded human-like games and 750 positions from real Lichess games (January 2013 database, via `development/extract-positions.mjs`), each including positions where the opponent can win one of your pieces. Every premove is checked to move your piece, to be legal after the likeliest reply, and not to lose against the opponent's best or any likely reply at depth 14. Final run: 270 premoves found, 0 failures.
+
 ## 1.14.0 · 2026-11-25
 
 ### Changed

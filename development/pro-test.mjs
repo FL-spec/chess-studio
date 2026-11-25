@@ -67,7 +67,7 @@ function engine({ onlyScore = 0 } = {}) {
       const answers = after.moves({ verbose: true });
       const answer = answers.find(move => uciOf(move) === 'e1d1') || answers[0];
       return { type: 'cp', value: 0, pv: [uciOf(reply), answer && uciOf(answer)].filter(Boolean) };
-    });
+    }).slice(0, only ? undefined : count);
   };
   return { analyze, calls };
 }
@@ -78,8 +78,13 @@ assert.equal(found.san, 'Kxd1');
 assert.ok(found.coverage > .85, String(found.coverage));
 // Only the likely replies and every forcing one are searched: Qxd1+ plus the
 // quiet replies until 95% of the probability, in one restricted search.
-assert.ok(scripted.calls[0].count < board.moves().length, String(scripted.calls[0].count));
-assert.ok(scripted.calls[0].only.split(' ').includes('d8d1'));
+const restricted = scripted.calls.find(call => call.only && call.position?.turn?.() !== 'w') || scripted.calls.find(call => call.only);
+assert.ok(restricted.count < board.moves().length, String(restricted.count));
+assert.ok(restricted.only.split(' ').includes('d8d1'));
+// The engine's best replies are always searched first, however unlikely.
+assert.equal(scripted.calls[0].only, undefined);
+const engineKept = relevantReplies(board.moves({ verbose: true }), new Map([['d8d1', .99]]), new Set(['e8f7'])).map(uciOf);
+assert.ok(engineKept.includes('e8f7'), engineKept.join());
 assert.equal(found.fen, board.fen());
 // Without weights every reply is checked; with them, captures and checks always are.
 assert.equal(relevantReplies(board.moves({ verbose: true })).length, board.moves().length);
@@ -105,4 +110,24 @@ assert.equal(await findSafePremove(risky, { analyze: riskyEngine, mode: 'safe' }
 const controller = new AbortController();
 controller.abort();
 await assert.rejects(findSafePremove(board, { analyze: scripted.analyze, weights, signal: controller.signal }), { name: 'AbortError' });
+// Premoves: only on the opponent's turn, only in games against a computer,
+// and only when your side is certain.
+{
+  const { premoveAllowed } = await import("../extension/premove.mjs");
+  const { Chess } = await import("../extension/vendor/chess.mjs");
+  const blackToMove = new Chess("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
+  const whiteToMove = new Chess();
+  const base = { opponentBot: true, playerColor: "w", playerSource: "account", flipped: false };
+  assert.equal(premoveAllowed(base, blackToMove), true);
+  assert.equal(premoveAllowed(base, whiteToMove), false, "your turn: no premove");
+  assert.equal(premoveAllowed({ ...base, opponentBot: false }, blackToMove), false, "human opponent: no premove");
+  assert.equal(premoveAllowed({ ...base, playerColor: undefined }, blackToMove), false, "unknown side");
+  assert.equal(premoveAllowed({ ...base, analysis: true }, blackToMove), false, "analysis board");
+  // Side from orientation: allowed only while the board still shows your side at the bottom.
+  assert.equal(premoveAllowed({ ...base, playerSource: "orientation" }, blackToMove), true);
+  assert.equal(premoveAllowed({ ...base, playerSource: "orientation", flipped: true }, blackToMove), false, "flipped board");
+  assert.equal(premoveAllowed({ ...base, playerColor: "b", playerSource: "orientation", flipped: true }, whiteToMove), true);
+  // Account match wins over a flipped board.
+  assert.equal(premoveAllowed({ ...base, flipped: true }, blackToMove), true);
+}
 console.log('Pro ranking, model ratings and safe premoves passed.');

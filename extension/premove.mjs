@@ -22,6 +22,9 @@ import { expectedScore } from "./pro-lines.mjs";
 // the move you would play anyway (best against 70% of likely replies).
 
 export const MAX_LOSS = 0.04;
+// "Obvious" premoves must stay close to best against every checked reply:
+// a search a few plies deeper can see more, so the margin is kept wide.
+export const OBVIOUS_MAX_LOSS = 0.02;
 const MAX_REPLIES = 48;
 const MAX_CANDIDATES = 3;
 const REPLY_MASS = 0.95;
@@ -31,7 +34,22 @@ const MIN_COVERAGE = 0.5;
 const NATURAL_COVERAGE = 0.7;
 const NEAR_BEST = 0.01;
 const FORCED_WEIGHT = 0.75;
+const ENGINE_REPLIES = 3;
 
+// A premove is computed only on the opponent's turn and only when your side is
+// certain: your account name matches a player, or the board still shows your
+// side at the bottom as when the game started. A flipped board or an unknown
+// side would otherwise turn the opponent's best move into a "premove".
+//
+// Premoves are offered only in games against a computer. Chess.com and Lichess
+// forbid move suggestions during a live game against a person, and a premove is
+// only useful during a live game.
+export function premoveAllowed(view, board) {
+  if (!view.opponentBot) return false;
+  if (!view.playerColor || view.analysis || board.turn() === view.playerColor) return false;
+  if (view.playerSource === "account") return true;
+  return view.playerSource === "orientation" && view.playerColor === (view.flipped ? "b" : "w");
+}
 export const uciOf = (move) => move.from + move.to + (move.promotion || "");
 
 function findMove(board, id) {
@@ -45,7 +63,7 @@ const forcing = (move) => Boolean(move.captured) || Boolean(move.promotion) || /
 const asPremove = (id) => id.length > 4 ? id.slice(0, 4) + "q" : id;
 
 /** The replies worth checking: likely ones by probability, plus every forcing one. */
-export function relevantReplies(replies, weights) {
+export function relevantReplies(replies, weights, always = new Set()) {
   if (!weights?.size) return replies;
   const sorted = [...replies].sort((a, b) => (weights.get(uciOf(b)) ?? 0) - (weights.get(uciOf(a)) ?? 0));
   const total = sorted.reduce((sum, move) => sum + (weights.get(uciOf(move)) ?? 0), 0);
@@ -58,7 +76,7 @@ export function relevantReplies(replies, weights) {
     picked.add(move);
     mass += weight;
   }
-  for (const move of replies) if (forcing(move)) picked.add(move);
+  for (const move of replies) if (forcing(move) || always.has(uciOf(move))) picked.add(move);
   return replies.filter(move => picked.has(move));
 }
 
@@ -74,7 +92,14 @@ export async function findSafePremove(board, { analyze, depth = 10, signal, weig
   signal?.throwIfAborted();
   const all = board.moves({ verbose: true });
   if (!all.length) return null;
-  const replies = relevantReplies(all, weights);
+  // The opponent's best replies by Stockfish are always checked, however
+  // unlikely the human model finds them: a strong reply the model misses (for
+  // example a king step that attacks the premoved piece) must not slip through.
+  // A no-op onProgress keeps this a quick search of its own instead of joining
+  // the panel's deeper search of the same position.
+  const top = await analyze(board, { depth, count: Math.min(ENGINE_REPLIES, all.length), signal, onProgress: () => {} });
+  signal?.throwIfAborted();
+  const replies = relevantReplies(all, weights, new Set(top.map(line => line.pv[0])));
   if (replies.length > MAX_REPLIES) return null;
   const fen = board.fen();
   const uniform = !weights?.size;
@@ -178,7 +203,7 @@ export async function findSafePremove(board, { analyze, depth = 10, signal, weig
         if (line.type === "mate" && line.value < 0 && !info.bestMate) return null;
         loss = Math.max(0, info.best - expectedScore(line));
       }
-      if (loss > MAX_LOSS) return trace?.({ candidate, reject: "loss", id, loss }), null;
+      if (loss > (mode === "obvious" ? OBVIOUS_MAX_LOSS : MAX_LOSS)) return trace?.({ candidate, reject: "loss", id, loss }), null;
       worstLoss = Math.max(worstLoss, loss);
       checked++;
       if (loss <= NEAR_BEST) coverage += weightOf(id);

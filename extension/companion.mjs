@@ -6,7 +6,7 @@ import { analyze, score } from "./engine.mjs";
 import { maiaLines, maiaPredict } from "./maia.mjs";
 import { humanLines, humanRanks } from "./human-lines.mjs";
 import { humanCandidates, proMetric, proSetting, rankPro } from "./pro-lines.mjs";
-import { findSafePremove, uciOf } from "./premove.mjs";
+import { findSafePremove, premoveAllowed, uciOf } from "./premove.mjs";
 import { moverRatings, playerRatings } from "./ratings.mjs";
 import { supported } from "./detect.mjs";
 import { GRADES, gradedTactic, gradeMove, refineGrade, streak, toCentipawns } from "./gamify.mjs";
@@ -459,6 +459,8 @@ async function followWebsite() {
         names: observation.names,
         username: websiteOptions.username || "",
         playerColor: observation.playerColor,
+        playerSource: observation.playerSource,
+        opponentBot: Boolean(observation.opponentBot),
         ratings: observation.ratings,
         modelRatings,
         proStyle: proSetting(websiteOptions),
@@ -555,7 +557,7 @@ async function followWebsite() {
         view.loadPro?.();
       }
       const runSignal = controller.signal;
-      if (view.pending && view.playerColor && board.turn() !== view.playerColor && !view.analysis)
+      if (view.pending && premoveAllowed(view, board))
         findPremove(view, board, controller.signal);
       // The main search runs alongside the premove check, so candidate lines are
       // not held back while the premove search covers every reply.
@@ -629,6 +631,8 @@ async function findPremove(view, board, signal) {
     const found = await findSafePremove(board, { analyze, depth, signal: budget, weights, mode: premoveMode });
     // Never show a premove for a position that is no longer on the board.
     if (signal.aborted || (found && view.fen && found.fen.split(" ")[0] !== view.fen.split(" ")[0])) return;
+    // It must move one of your pieces.
+    if (found && board.get(found.from)?.color !== view.playerColor) return;
     view.premove = found;
   } catch (error) {
     if (signal.aborted) return;

@@ -8,3 +8,4 @@ ui-audit/
 design-review/
 development/*.png
 development/test-results/
+development/premove-stress.json

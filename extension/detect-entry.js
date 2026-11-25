@@ -129,7 +129,18 @@
     else if (practiceSite || playing)
       playerColor = decided.key === key && decided.color ? decided.color : (flipped ? "b" : "w");
     if (playerColor) decided = { key, color: playerColor };
-    return { names, ratings, playerColor };
+    // How your side is known: your account name ("account") or the board
+    // orientation when the game started ("orientation").
+    const playerSource = match ? "account" : playerColor ? "orientation" : undefined;
+    // Games against a computer: Chess.com's bot and coach pages, or a Lichess
+    // opponent that is Stockfish or carries the BOT title. Both sites allow
+    // assistance only in such games, so premoves are offered only there.
+    const botName = (value) => /\bstockfish\b|\bBOT\b/.test(value || "");
+    const lichessBot = lichess && Boolean(
+      document.querySelector(".ruser-top .utitle[data-bot], .ruser-bottom .utitle[data-bot]") ||
+      botName(text(".ruser-top")) || botName(text(".ruser-bottom")));
+    const opponentBot = practiceSite || lichessBot;
+    return { names, ratings, playerColor, playerSource, opponentBot };
   }
   function pageBoard() {
     return document.querySelector(
@@ -218,7 +229,13 @@
     // A premove is your move after the opponent replies: it must be legal
     // after at least one of their moves (the sites' own premove rule).
     let premove = "";
-    if (typeof message.premove === "string" && legal.test(message.premove)) {
+    // A premove is only for the opponent's turn and only moves your pieces.
+    const turn = observed.fen.split(" ")[1];
+    const yours = observed.playerColor;
+    const piece = typeof message.premove === "string"
+      ? new Chess(observed.fen).get(message.premove.slice(0, 2)) : null;
+    const premoveSide = !yours || (turn !== yours && piece?.color === yours);
+    if (premoveSide && typeof message.premove === "string" && legal.test(message.premove)) {
       const game = new Chess(observed.fen);
       const fits = game.moves({ verbose: true }).some((reply) => {
         game.move(reply);
