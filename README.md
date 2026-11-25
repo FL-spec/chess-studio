@@ -24,6 +24,7 @@ Chess Studio follows the board you are playing or analysing, shows the strongest
 - **Three views.** A pop-out window, a panel pinned in Chrome's side panel, and Studio, a full workspace with replay controls.
 - **Practice.** Play as White or Black against a local opponent, with or without hints.
 - **Game review.** When a game ends, the panel shows the result and an **Open in Studio** button. It opens a clean review of the whole game: accuracy, grade counts, an evaluation graph, the move list with grade icons, and the coach explaining each move.
+- **Commentator in Studio.** The same coach comments in Studio: on your moves in Practice, on every move in Review, and on your attempt when you retry a position. For a move that was not the best, it names the best move and can show it on the board.
 - **Review.** Load a PGN or FEN, compare the played move with Stockfish's best line, find turning points, and replay a position with hints hidden.
 - **Library.** Save positions and games locally and export them as PGN.
 
@@ -66,7 +67,7 @@ The popup and side panel follow the most recently active workspace. Keep the wor
 
 ### Follow a game
 
-1. Open a supported board: Chess.com Play Coach, a computer or standard game (localized URLs included), Chess.com Analysis, or Lichess Analysis.
+1. Open a supported board: Chess.com Play Coach, a computer or standard game (localized URLs included), Chess.com Analysis, Lichess Analysis, or a Lichess game page.
 2. Open a view. It names the source board and shows the side to move.
 3. Choose **Engine** for Stockfish's strongest lines or **Human** for the most likely moves at the selected skill level.
 
@@ -154,7 +155,7 @@ scripts/           release packaging
 
 ## Limitations
 
-- Automatic detection and arrows cover Chess.com standard boards on the routes listed above and Lichess Analysis. Other sites need **Read this tab** or a pasted PGN or FEN.
+- Automatic detection and arrows cover Chess.com standard boards on the routes listed above, Lichess Analysis and Lichess game pages. Other sites need **Read this tab** or a pasted PGN or FEN.
 - The skill setting is a model input. It does not certify a playing rating.
 - Human continuations are model predictions, and engine results can change with depth.
 

@@ -7,9 +7,10 @@ import { maiaLines, maiaRanks } from "./maia.mjs";
 import { bulletReset, bulletValues, leavesBullet, websiteDefaults } from "./website-preferences.mjs";
 import { Chess } from "./vendor/chess.mjs";
 import { analyze, score, uci } from "./engine.mjs";
-import { drawBoard, explain, notation, moveVisual, choosePromotion } from "./chess-view.mjs";
+import { drawBoard, notation, moveVisual, choosePromotion } from "./chess-view.mjs";
 import { moveEvidence } from "./analysis-evidence.mjs";
 import { evaluationMeter } from "./companion-view.mjs";
+import { updateStudioCoach } from "./studio-coach.mjs";
 import { humanLines } from "./human-lines.mjs";
 import { rankHuman } from "./policy.mjs";
 import weights from "./weights.mjs";
@@ -305,9 +306,7 @@ function renderAnalysis() {
       settings.coach === "always" ||
       pinnedReason === cursor)
   ) {
-    const title = document.createElement("h3");
-    title.textContent = "Why " + last.san + "?";
-    reason.append(title, label(explain(last)));
+    // The commentator card above explains the move; keep only the board action.
     if (!preview)
       reason.append(
         button("Show on board", () => {
@@ -321,6 +320,7 @@ function renderAnalysis() {
       button("Explain " + last.san, () => {
         pinnedReason = cursor;
         renderAnalysis();
+        updateCoach();
         publish(atCursor());
       }),
     );
@@ -503,6 +503,22 @@ function render() {
   } else if (mode === "library") renderLibrary();
   else renderSettings();
 }
+// The commentator card: Practice and Review. In Practice it follows the
+// "Practice explanations" setting: after every move, or when asked.
+function updateCoach() {
+  if (mode !== "practice" && mode !== "review") return;
+  updateStudioCoach($("studio-coach"), {
+    mode, history: game.history({ verbose: true }), cursor, side,
+    coachId: websiteOptions.coachCharacter || "nova",
+    exercise: Boolean(exercise),
+    hidden: mode === "practice" && settings.coach !== "always" && pinnedReason !== cursor,
+    onShow: (fen, line) => {
+      selected = null;
+      preview = { fen, line, index: 0 };
+      render();
+    },
+  });
+}
 function refresh() {
   gameScan?.abort();
   $("scan-results").replaceChildren();
@@ -544,6 +560,7 @@ function refresh() {
   render();
   persist();
   publish(position);
+  updateCoach();
   if (analysisPending) {
     analyze(position, { depth: settings.depth, signal: job.signal })
       .then((lines) => {

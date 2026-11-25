@@ -66,7 +66,11 @@ assert.equal(await page.locator('#board .board-marks').count(),0,'left click cle
 await page.locator('[data-square=e2]').click();
 await page.locator('[data-square=e4]').click();
 await page.waitForFunction(()=>document.querySelector('#counter').textContent==='2 / 2');
-assert.match(await page.locator('#reason').innerText(),/Why/);
+// The commentator: after the opponent's quiet reply it still talks about your e4.
+const coachSays=(pattern)=>page.waitForFunction((source)=>new RegExp(source).test(document.querySelector('#studio-coach .sc-title')?.textContent||''),pattern.source,{timeout:24000});
+await coachSays(/^e4 (?:·|is)/);
+console.log('Studio coach:',await page.locator('#studio-coach').innerText());
+assert.equal(await page.locator('#studio-coach .sc-face').count(),1);
 await page.locator('button.candidate').first().waitFor();
 await page.locator('button.candidate').first().click();
 assert.match(await page.locator('#counter').innerText(),/Line 1/);
@@ -101,7 +105,9 @@ await page.getByRole('button',{name:'Load',exact:true}).click();
 await page.getByRole('alert').getByText(/could not/).waitFor();
 await page.getByRole('textbox',{name:'PGN or FEN'}).fill('1. e4 e5 2. Nf3 Nc6 3. Bb5 *');
 await page.getByRole('button',{name:'Load',exact:true}).click();
-await page.getByRole('heading',{name:'Why Bb5?'}).waitFor();
+// Review: the commentator names the book move at the cursor.
+await coachSays(/^Bb5 · /);
+console.log('Review coach:',await page.locator('#studio-coach').innerText());
 await page.locator('button.candidate').first().waitFor();
 await page.screenshot({path:'review.png'});
 await page.getByRole('button',{name:'Find turning points'}).click();
@@ -112,8 +118,11 @@ await page.locator('[data-square=f1]').dragTo(page.locator('[data-square=b5]'));
 await page.waitForFunction(()=>document.querySelector('#counter').textContent==='1 / 1');
 assert.equal(await page.locator('[data-square=b5] img').count(),1,'drag-move lands the bishop');
 assert.equal(await page.locator('#board .square.last').count(),2);
+// Retry exercise: the commentator grades the attempt.
+await coachSays(/^Bb5 (?:·|is)/);
+console.log('Exercise coach:',await page.locator('#studio-coach').innerText());
 await page.getByRole('button',{name:'Return to review'}).click();
-await page.getByRole('heading',{name:'Why Bb5?'}).waitFor();
+await coachSays(/^Bb5 · /);
 await page.getByRole('button',{name:'Compare played move'}).click();
 await page.getByRole('button',{name:'Replay best line'}).waitFor({timeout:24000});
 await page.getByRole('button',{name:'Replay best line'}).click();

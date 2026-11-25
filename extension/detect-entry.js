@@ -141,6 +141,27 @@
         : "wc-chess-board, chess-board, #board-single, .chessboard",
     );
   }
+  const SAN = /^(?:[KQRBN]?[a-h1-8]*x?[a-h][1-8](?:=[QRBN])?|[O0]-[O0](?:-[O0])?)[+#]?[!?]*$/;
+  // Lichess move lists. Analysis: <move><san>e4</san></move> children of
+  // .tview2 (the main line; variations sit deeper). Game pages: Lichess
+  // renames the tags now and then (rm6/kwdb, then i5d/z7yx), so find the
+  // element under .round__app whose direct children are the most moves.
+  function lichessMoveNodes() {
+    const analysis = document.querySelectorAll(".tview2 > move > san");
+    if (analysis.length) return [...analysis];
+    const app = document.querySelector(".round__app");
+    if (!app) return [];
+    const groups = new Map();
+    for (const node of app.querySelectorAll("*")) {
+      if (node.children.length || node.closest("cg-container, .rclock, .ruser") || !SAN.test(node.textContent.trim())) continue;
+      const list = groups.get(node.parentElement) || [];
+      list.push(node);
+      groups.set(node.parentElement, list);
+    }
+    let best = [];
+    for (const list of groups.values()) if (list.length > best.length) best = list;
+    return best;
+  }
   // The result the site shows when a game ends ("1-0", "0-1", "½-½") and,
   // when it says so, why (checkmate, resignation, time…). Best effort: the
   // panel also finds checkmate, stalemate and draws from the moves themselves.
@@ -179,27 +200,31 @@
     }
     const lichess = location.hostname === "lichess.org";
     const site = lichess ? "LICHESS" : "CHESS.COM";
-    const startFen = lichess
-      ? decodeURIComponent(
-          location.pathname.split("/").slice(3).join("/"),
-        ).replaceAll("_", " ") || undefined
-      : undefined;
+    // Lichess Analysis URLs: /analysis, /analysis/<fen>, /analysis/standard/<fen>
+    // or /analysis/pgn/<moves>. Only a real FEN in the URL is a start position.
+    let startFen;
+    if (lichess) {
+      const parts = decodeURIComponent(location.pathname).split("/").slice(2);
+      if (/^(?:standard|fromPosition)$/i.test(parts[0] || "")) parts.shift();
+      const candidate = parts.join("/").replaceAll("_", " ").trim();
+      if (/^[prnbqkPRNBQK1-8]+(?:\/[prnbqkPRNBQK1-8]+){7}(?: |$)/.test(candidate)) startFen = candidate;
+    }
     const board = pageBoard();
     if (!board) return { status: "waiting" };
     const flipped = isFlipped(board);
     const players = readPlayers(board, flipped, lichess);
     const pieces = lichess ? lichessPlacement(board) : placement(board);
+    // Lichess Analysis shows the exact FEN of the shown position under the board.
     const fen =
+      (lichess && document.querySelector(".analyse__underboard input.copyable")?.value?.trim()) ||
       board.getAttribute("data-fen") ||
       board.getAttribute("fen") ||
       board.getAttribute("data-chess-studio-fen");
-    const moves = [
-      ...document.querySelectorAll(
-        lichess
-          ? "rm6 kwdb, .analyse__moves move"
-          : "wc-simple-move-list .node, vertical-move-list .node, wc-move-list .node, .vertical-move-list .node, .move-list .move-text",
-      ),
-    ]
+    const moves = (lichess
+      ? lichessMoveNodes()
+      : [...document.querySelectorAll(
+          "wc-simple-move-list .node, vertical-move-list .node, wc-move-list .node, .vertical-move-list .node, .move-list .move-text",
+        )])
       .map((node) => {
         const clone = node.cloneNode(true);
         for (const icon of clone.querySelectorAll(
@@ -253,7 +278,8 @@
     const yours = observed.playerColor;
     const piece = typeof message.premove === "string"
       ? new Chess(observed.fen).get(message.premove.slice(0, 2)) : null;
-    const premoveSide = !yours || (turn !== yours && piece?.color === yours);
+    // Your side must be known: an unknown side could turn the opponent's move into a "premove".
+    const premoveSide = Boolean(yours) && turn !== yours && piece?.color === yours;
     if (premoveSide && typeof message.premove === "string" && legal.test(message.premove)) {
       const game = new Chess(observed.fen);
       const fits = game.moves({ verbose: true }).some((reply) => {

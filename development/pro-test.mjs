@@ -60,7 +60,7 @@ function engine({ onlyScore = 0 } = {}) {
     calls.push({ fen: position.fen(), count, only });
     const moves = position.moves({ verbose: true });
     if (position.turn() === 'w')
-      return only.split(' ').map(id => ({ type: 'cp', value: onlyScore, pv: [id] }));
+      return (only ? only.split(' ') : moves.slice(0, count).map(uciOf)).map(id => ({ type: 'cp', value: onlyScore, pv: [id] }));
     return moves.filter(reply => !only || only.split(' ').includes(uciOf(reply))).map(reply => {
       const after = new Chess(position.fen());
       after.move(reply);
@@ -106,6 +106,23 @@ const risky = new Chess('3qk3/8/8/8/8/8/8/3QK3 b - - 0 1');
 const riskyEngine = async (position, { only }) => position.turn() === 'w' && only ? only.split(' ').map(id => ({ type: 'cp', value: -600, pv: [id] }))
   : position.moves({ verbose: true }).filter(reply => !only || only.split(' ').includes(uciOf(reply))).map(reply => ({ type: 'cp', value: 0, pv: [uciOf(reply), 'd1d7'] }));
 assert.equal(await findSafePremove(risky, { analyze: riskyEngine, mode: 'safe' }), null);
+// "Forced" means the opponent has at most three legal replies, not three
+// checked ones. Here Black has five king moves; the model puts all its mass on
+// three of them, and the quiet premove Rb1 costs 1.5% after the third. That is
+// not the move you would play anyway, so "obvious" rejects it; "safe" keeps it.
+{
+  const spread = new Chess('4k3/8/8/8/8/8/8/R3K3 b - - 0 1');
+  const ids = spread.moves({ verbose: true }).map(uciOf);
+  const spreadWeights = new Map(ids.map((id, i) => [id, [.4, .35, .25][i] ?? 0]));
+  const third = ids[2];
+  const spreadEngine = async (position, { only, count }) => {
+    if (position.turn() === 'w') return (only ? only.split(' ') : position.moves({ verbose: true }).slice(0, count).map(uciOf)).map(id => ({ type: 'cp', value: -16, pv: [id] }));
+    return position.moves({ verbose: true }).filter(reply => !only || only.split(' ').includes(uciOf(reply)))
+      .map(reply => ({ type: 'cp', value: 0, pv: [uciOf(reply), uciOf(reply) === third ? 'a1a2' : 'a1b1'] })).slice(0, only ? undefined : count);
+  };
+  assert.equal(await findSafePremove(spread, { analyze: spreadEngine, weights: spreadWeights }), null, 'three checked replies are not a forced reply');
+  assert.equal((await findSafePremove(spread, { analyze: spreadEngine, weights: spreadWeights, mode: 'safe' }))?.move, 'a1b1');
+}
 // Aborting stops the search.
 const controller = new AbortController();
 controller.abort();

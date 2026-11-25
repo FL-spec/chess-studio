@@ -27,7 +27,7 @@ for (const text of games) {
   const elo = (tag) => Number(text.match(new RegExp('\\[' + tag + ' "(\\d+)"\\]'))?.[1] || 0);
   const white = elo("WhiteElo"), black = elo("BlackElo");
   if (!white || !black) continue;
-  const movetext = text.split(/\n\n/).at(-1)
+  const movetext = text.trim().split(/\n\n/).at(-1)
     .replace(/\{[^}]*\}/g, " ").replace(/\d+\.(\.\.)?/g, " ").replace(/(1-0|0-1|1\/2-1\/2|\*)\s*$/, " ");
   const sans = movetext.split(/\s+/).filter(Boolean);
   if (sans.length < 16) continue;

@@ -10,7 +10,7 @@ The core workflow is to open the extension beside a board, confirm that the posi
 | Learn from a choice | Explanations describe observable effects on the board. The built-in review workspace lets players replay a candidate, compare it with the played move, or retry the position. |
 | Use the tool without a subscription | Stockfish, the human model, practice, and review run locally. All controls are available without an account. |
 
-Remaining opportunities are to validate more signed-in page layouts and game variants, add per-site detection diagnostics, and calibrate the human model on a larger recent holdout by skill band and game phase. Current automatic adapters cover Chess.com standard boards on the listed routes and Lichess Analysis. Paste PGN or FEN for other boards. The human skill scale is a model input and does not certify playing Elo.
+Remaining opportunities are to validate more signed-in page layouts and game variants, add per-site detection diagnostics, and calibrate the human model on a larger recent holdout by skill band and game phase. Current automatic adapters cover Chess.com standard boards on the listed routes, Lichess Analysis and Lichess game pages. Paste PGN or FEN for other boards. The human skill scale is a model input and does not certify playing Elo.
 
 ## Feature coverage
 

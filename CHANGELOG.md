@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.16.0 · 2026-11-25
+
+### Fixed
+
+- **Lichess works again.** Lichess moved game pages to `/game/<id>` and renamed the tags of its move list, so Chess Studio found no game there. Game pages are now supported, and the move list is found by its structure, not by tag names that Lichess changes. Lichess Analysis links with moves in the URL (`/analysis/pgn/e4_e5…`) were read as a broken start position and stayed on "Waiting for a readable position"; they now work, and Analysis reads the main line only, not side variations.
+
+### Added
+
+- **The commentator in Studio.** Your coach now comments in Studio: on your moves in Practice (and on the opponent's only for extremes), on every move in Review, and on your attempt when you retry a position. Grades, book names and traps are the same as in Game review, and repetitions count. For a move that was not the best, the coach names the best move, and **Show** plays it on the board. In Practice it follows **Practice explanations**: after every move, or on demand.
+
+### Changed
+
+- **Premoves: one measuring stick.** A premove's cost after each reply is now measured against your best answer in the same search, at the same depth, instead of a shallower earlier search. The stricter of the two is used.
+- **Premove arrows need your side.** The page no longer draws a premove when your side is unknown (the panel already did not compute one).
+- **Premoves check replies that expose the premoved piece.** The search checks the likely replies, every capture, check and promotion, and Stockfish's top three. A rare quiet reply could still win a premoved piece: for example, a pawn step to g3 or h4 covers h4, and a premoved …Qh4+ loses the queen. Every other reply after which the opponent could take the premoved piece is now checked too (at most six; with more, no premove is shown).
+- **Premoves: the likeliest reply is checked two plies deeper.** That reply is where a premove is most often played, and a small loss can grow a few plies on. For example, recapturing with bxc4 after …bxc4 in a lost position looked free at depth 12 but was 3.8% behind the best move at depth 14. The premove and your best answer are scored in the same deeper search, and a premove that loses more than the limit there is dropped.
+- **Premove mate check.** "You are mated whatever you answer" was read the wrong way round. The loss check already blocked the same premoves, so no wrong premove was shown, but the rule now says what it means.
+
+### Tests
+
+- **Stricter premove stress test** (`development/premove-stress.cjs`). Every premove found is now checked at depth 14 against every legal reply after which it stays legal, not only the replies the premove search already looked at. It fails if the premove loses more than 5% expected score (was 8%) after a reply with at least 2% probability or one of Stockfish's top three, or more than 2% weighted by reply probability. Rare replies that still cost something, such as a hung queen the premove does not take, are reported as blind spots. The old test missed the …Qh4+ case above. The premove and your best answer are scored in the same search, as in the premove search: a single-move search can land on a different value at the same depth and report a loss that deeper searches do not confirm (fxe7 after …Rxe7, flagged at 7.6% but the best move at depths 16 and 18). Results: on 233 positions from real 2026 Lichess blitz games, 39 premoves, no failure, no blind spot, mean weighted loss 0.12%. On 744 generated positions, 132 premoves, no failure, 33 blind spots in 9 premoves, mean weighted loss 0.15%.
+- `development/extract-positions.mjs` read no games from PGN files whose games end with a blank line. Fixed.
+- New live Lichess check (`development/lichess-live.cjs`): loads the extension and reads Lichess Analysis (PGN and FEN links) and a current game page. Lichess blocks headless browsers, so set `CHESS_TEST_HEADED=1`.
+- Studio smoke test checks the commentator in Practice, Review and a retried position.
+
 ## 1.15.0 · 2026-11-25
 
 ### Added
@@ -30,7 +55,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
-- **Premoves are back in every game.** 1.14.1 limited premoves to games against a computer. That rule is removed: premoves appear again in all live games, as in 1.14.0. The other 1.14.1 premove fixes stay (your side only, the opponent's top engine replies always checked, stricter "Obvious" premoves).
+- **Premoves are back in every game.** 1.14.1 limited premoves to games against a computer. That rule is removed because it works on Chess.com live, and it should work: premoves appear again in all live games, as in 1.14.0. The other 1.14.1 premove fixes stay (your side only, the opponent's top engine replies always checked, stricter "Obvious" premoves).
 
 ## 1.14.1 · 2026-11-25
 
@@ -42,7 +67,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
-- **Premoves only in games against a computer.** Chess.com and Lichess forbid move help during live games against people, and a premove only helps during a live game. Premoves now appear on Chess.com's bot and coach pages and in Lichess games against Stockfish or a BOT account. Settings says so.
+- **Premoves only in games against a computer.** Premoves now appear on Chess.com's bot and coach pages and in Lichess games against Stockfish or a BOT account. Settings says so.
 
 ### Tests
 

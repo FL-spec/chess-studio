@@ -21,6 +21,16 @@ assert.equal(supported('https://chess.com/pt/play/coach'),true);
 assert.equal(supported('https://chess.com/play/coaching'),false);
 assert.equal(supported('https://lichess.org/analysis'),true);
 assert.equal(supported('https://lichess.org/abc123'),false);
+// Lichess game pages: /game/<id>, /<id>, 12-character player ids, /white or /black.
+assert.equal(supported('https://lichess.org/game/sRxA1pIS'),true);
+assert.equal(supported('https://lichess.org/sRxA1pIS'),true);
+assert.equal(supported('https://lichess.org/sRxA1pIS/black'),true);
+assert.equal(supported('https://lichess.org/sRxA1pISab12'),true);
+assert.equal(supported('https://lichess.org/analysis/pgn/e4_e5'),true);
+// Reserved pages are lowercase words, not game ids.
+assert.equal(supported('https://lichess.org/training'),false);
+assert.equal(supported('https://lichess.org/streamer'),false);
+assert.equal(supported('https://lichess.org/@/someone'),false);
 assert.equal(supported('https://www.chess.com/game/live/123'),true);
 assert.equal(supported('https://chess.com/game/123'),true);
 assert.equal(automaticArrows('https://www.chess.com/pt/game/123'),true);

@@ -2,7 +2,7 @@ import { Chess } from "./vendor/chess.mjs";
 
 export function supported(url) {
   const { hostname, pathname } = new URL(url);
-  if (hostname === "lichess.org") return /^\/analysis(?:\/|$)/.test(pathname);
+  if (hostname === "lichess.org") return lichessBoardPage(pathname);
   return (
     (hostname === "www.chess.com" || hostname === "chess.com") &&
     /^\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/)?(?:play\/(?:computer|coach|online)|game\/(?:live|[0-9]+)|live|analysis)(?:\/|$)/i.test(
@@ -11,6 +11,16 @@ export function supported(url) {
   );
 }
 export const automaticArrows = supported;
+
+// Lichess boards: the Analysis board and game pages. Games live at
+// /game/<id> (Lichess redirects /<id> there), with 8-character game ids and
+// 12-character player ids, optionally followed by /white or /black.
+// Reserved words such as /training are all lowercase letters; ids are not.
+export function lichessBoardPage(pathname) {
+  if (/^\/analysis(?:\/|$)/.test(pathname)) return true;
+  const match = pathname.match(/^\/(?:game\/)?([a-zA-Z0-9]{8}|[a-zA-Z0-9]{12})(?:\/(?:white|black))?\/?$/);
+  return Boolean(match) && (pathname.startsWith("/game/") || !/^[a-z]+$/.test(match[1]));
+}
 
 export function placement(board) {
   const squares = new Map();
@@ -44,6 +54,8 @@ export function lichessPlacement(board) {
       piece.classList.contains("dragging")
     )
       return;
+    // A captured piece fading out shares its square with the capturer.
+    if (piece.classList.contains("fading")) continue;
     const kind = [...piece.classList].find((token) =>
       Object.hasOwn(names, token),
     );

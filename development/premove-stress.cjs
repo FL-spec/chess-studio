@@ -8,10 +8,13 @@
 // Invariants for every premove found:
 //   side    - it moves one of your pieces (never the opponent's).
 //   legal   - it is legal after the opponent's likeliest reply.
-//   safe    - against the opponent's best reply (Stockfish) and every reply with
-//             at least 10% probability, after which it is legal, it loses at most
-//             SAFE_LOSS expected score versus your best answer, checked
-//             independently at depth 14.
+//   safe    - checked independently at depth 14 against EVERY legal reply after
+//             which it stays legal, with the premove and the best answer
+//             scored in the same search. It must lose at most SAFE_LOSS (0.05) expected
+//             score against your best answer after each reply the premove claims to
+//             cover (2%+ probability or Stockfish's top 3), and at most
+//             EXPECTED_LOSS (0.02) weighted by reply probability. Rare replies
+//             that still punish it are reported as blind spots.
 // Usage: CHESS_TEST_CHROME=... node premove-stress.cjs [games] [targeted]
 const {chromium}=require('playwright-core');
 const path=require('node:path');
@@ -42,7 +45,9 @@ try {
     const {humanRanks}=await import('./human-lines.mjs');
     const {expectedScore}=await import('./pro-lines.mjs');
     const {see,VALUE}=await import('./tactics.mjs');
-    const SAFE_LOSS=0.08; // 2 x MAX_LOSS: room for depth 12 vs 14 noise
+    const SAFE_LOSS=0.05; // Lichess's inaccuracy threshold
+    const EXPECTED_LOSS=0.02; // probability-weighted loss over all replies
+    const blindSpots=[],losses=[],worsts=[];
     let seed=20261125;
     const random=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
     const sample=(ranks)=>{let r=random(),acc=0;for(const row of ranks){acc+=row.probability;if(r<=acc)return row.move;}return ranks[0]?.move;};
@@ -82,31 +87,58 @@ try {
       found[kind]++;
       const fail=(why,extra={})=>failures.push({kind,fen,premove:premove.san,move:premove.move,why,...extra});
       if(board.get(premove.from)?.color!==player){fail('side');continue;}
-      // Replies to check independently: the engine's best and every likely one.
-      const [top]=await analyze(board,{depth:14,count:1});
-      const check=new Set(ranks.filter(r=>r.probability>=0.10).map(r=>uciOf(r.move)));
-      if(top?.pv[0]) check.add(top.pv[0]);
+      // Every legal reply is checked independently at depth 14, not only the
+      // replies the premove search looked at. A reply that ends the game, or
+      // after which the premove is illegal (the site cancels it), is skipped.
+      const top=await analyze(board,{depth:14,count:Math.min(3,width)});
+      const engineTop=new Set(top.map(line=>line.pv[0]));
+      const probability=new Map(ranks.map(r=>[uciOf(r.move),r.probability]));
       const likeliest=uciOf(ranks[0].move);
-      for(const id of check){
+      let expectedLoss=0,worst=0;
+      for(const reply of board.moves({verbose:true})){
+        const id=uciOf(reply);
         const after=new Chess(fen);
-        after.move({from:id.slice(0,2),to:id.slice(2,4),promotion:id[4]});
+        after.move(reply);
         if(after.isGameOver()) continue;
         const legal=after.moves({verbose:true}).find(m=>m.from+m.to===premove.move.slice(0,4)&&(!m.promotion||m.promotion==='q'));
         if(!legal){if(id===likeliest)fail('illegal after likeliest',{reply:id});continue;}
-        const [best]=await analyze(after,{depth:14,count:1});
+        const lines=await analyze(after,{depth:14,count:1});
+        const best=lines[0];
         if(!best||best.pv[0]===uciOf(legal)) continue;
-        const [mine]=await analyze(after,{depth:14,count:1,only:uciOf(legal)});
-        const loss=expectedScore(best)-expectedScore(mine);
-        if(loss>SAFE_LOSS) fail('loses',{reply:id,loss:Math.round(loss*1000)/1000,best:best.pv[0]});
+        // One measuring stick, as in the premove search: the premove and the best
+        // answer are scored in the same search. A single-move search can land on
+        // a different value at the same depth (fxe7 in 2r1r3/2qkBp2/… after …Rxe7:
+        // 0.37 alone, 0.47 next to Nc3, best at depths 16 and 18). The stricter
+        // of the two references for the best answer is kept.
+        const pair=await analyze(after,{depth:14,count:2,only:best.pv[0]+' '+uciOf(legal)});
+        const mine=pair.find(line=>line.pv[0]===uciOf(legal));
+        if(!mine){fail('no score',{reply:id});continue;}
+        const reference=Math.max(expectedScore(best),...pair.filter(line=>line.pv[0]===best.pv[0]).map(expectedScore));
+        const loss=Math.max(0,reference-expectedScore(mine));
+        const p=probability.get(id)??0;
+        expectedLoss+=p*loss;
+        worst=Math.max(worst,loss);
+        if(loss<=SAFE_LOSS) continue;
+        const detail={reply:id,p:Math.round(p*1000)/1000,loss:Math.round(loss*1000)/1000,best:best.pv[0]};
+        // Replies the premove claims to cover: likely (2%+) or among Stockfish's top 3.
+        if(p>=0.02||engineTop.has(id)) fail('loses',detail);
+        else blindSpots.push({fen,premove:premove.san,...detail});
       }
+      if(expectedLoss>EXPECTED_LOSS) fail('expected loss',{expectedLoss:Math.round(expectedLoss*1000)/1000});
+      losses.push(expectedLoss);worsts.push(worst);
       if(index%25===0) console.log('#'+index+'/'+positions.length+' found '+(found.random+found.attacked)+' failures '+failures.length);
     }
     ms.sort((a,b)=>a-b);
-    return {positions:positions.length,random:random_.length,attacked:targeted.length,found,failures,
+    losses.sort((a,b)=>a-b);
+    const mean=(list)=>list.length?Math.round(list.reduce((a,b)=>a+b,0)/list.length*10000)/10000:0;
+    return {positions:positions.length,random:random_.length,attacked:targeted.length,found,failures,blindSpots,
+      meanExpectedLoss:mean(losses),p90ExpectedLoss:Math.round((losses[Math.floor(losses.length*0.9)]||0)*10000)/10000,
+      premovesWithBlindSpot:new Set(blindSpots.map(b=>b.fen)).size,
       medianMs:Math.round(ms[ms.length>>1]),p90Ms:Math.round(ms[Math.floor(ms.length*0.9)]),maxMs:Math.round(ms.at(-1))};
   },[GAMES,TARGETED,FILE]);
   fs.writeFileSync('premove-stress.json',JSON.stringify(report,null,1));
-  console.log(JSON.stringify({...report,failures:report.failures.length},null,1));
+  console.log(JSON.stringify({...report,failures:report.failures.length,blindSpots:report.blindSpots.length},null,1));
+  for(const b of report.blindSpots.slice(0,10)) console.log('blind spot',JSON.stringify(b));
   for(const f of report.failures.slice(0,20)) console.log(JSON.stringify(f));
   assert.equal(report.failures.length,0,'premove failures');
   console.log('Premove stress passed: '+report.positions+' positions, no wrong-side, illegal or losing premove.');
