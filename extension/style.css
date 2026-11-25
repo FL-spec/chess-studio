@@ -2326,3 +2326,21 @@ body[data-commentator] footer { background: var(--paper); backdrop-filter: none;
   top: auto; bottom: 4px; left: 50%; right: auto; width: 22px; height: 3px; transform: translateX(-50%);
 }
 .panel .position-players .board-player-name { font-size: 14px; }
+/* Player to move: a slim bar along the left edge, nearly full height. */
+.panel .position-players .board-player[data-active]::after,
+.position-players .board-player[data-active]::after {
+  top: 7px; bottom: 7px; left: 4px; right: auto; width: 3px; height: auto; transform: none; border-radius: 3px;
+  background: var(--live);
+}
+
+/* ---------- Commentator: comments in the same speech bubble as Coach mode ---------- */
+.cm-item .cm-say {
+  position: relative; margin: 8px 0 0; padding: 10px 14px; border-radius: 14px;
+  background: var(--rail); border: 1px solid var(--rule); font-size: 15px; line-height: 1.5; color: var(--ink);
+}
+.cm-item .cm-say::before {
+  content: ""; position: absolute; left: 18px; top: -6px; width: 10px; height: 10px;
+  background: var(--rail); border-left: 1px solid var(--rule); border-top: 1px solid var(--rule);
+  transform: rotate(45deg);
+}
+.cm-item .cm-example { margin: 6px 0 0 14px; font-size: 14px; color: var(--muted); }

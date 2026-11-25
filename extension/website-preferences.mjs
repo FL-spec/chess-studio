@@ -3,6 +3,8 @@ export const websiteDefaults = {
   bullet: false,
   arrows: true,
   arrowSide: "preview",
+  // With "Selected player" arrows, also draw the other side's replies.
+  opponentArrows: true,
   maia: true,
   lens: "engine",
   depth: 16,

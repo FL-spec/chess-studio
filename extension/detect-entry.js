@@ -46,43 +46,83 @@
       else marker.position();
     });
   }
+  // Your account name: read from the site's own menus and remembered, so it
+  // still works on pages where the menu is collapsed or missing.
+  const accounts = (await chrome.storage.local.get("accounts")).accounts || {};
+  function accountName(lichess) {
+    const key = lichess ? "lichess" : "chesscom";
+    let name = "";
+    if (lichess) name = document.querySelector("#user_tag")?.textContent.trim() || "";
+    else {
+      const link = document.querySelector(
+        '#sidebar-main-menu a[href*="/member/"], nav a[href*="/member/"], header a[href*="/member/"]',
+      );
+      name = link?.pathname.split("/").filter(Boolean).at(-1) || "";
+    }
+    name = name.toLowerCase();
+    if (name && accounts[key] !== name) {
+      accounts[key] = name;
+      chrome.storage.local.set({ accounts }).catch(() => {});
+    }
+    return name || accounts[key] || "";
+  }
+  // Your side is decided once per game and then kept, so a flipped board or a
+  // moving piece later in the game cannot swap it.
+  let decided = { key: "", color: undefined };
   function readPlayers(board, flipped, lichess) {
-    if (lichess) return {};
-    const layout = board.closest(".board-layout-main");
-    const readName = (side) =>
-      layout?.querySelector(".board-layout-" + side + " .cc-user-username-component")
-        ?.textContent.trim() || "";
-    const top = readName("top");
-    const bottom = readName("bottom");
+    const text = (selector) => document.querySelector(selector)?.textContent.trim() || "";
+    let top, bottom, topRating = null, bottomRating = null;
+    if (lichess) {
+      // Lichess game page: the players above and below the board.
+      top = text(".ruser-top .user-link, .ruser-top a.text");
+      bottom = text(".ruser-bottom .user-link, .ruser-bottom a.text");
+      const rating = (side) => {
+        const value = Number(text(".ruser-" + side + " rating").replace(/[^\d]/g, ""));
+        return value >= 100 && value <= 3500 ? value : null;
+      };
+      topRating = rating("top");
+      bottomRating = rating("bottom");
+    } else {
+      const layout = board.closest(".board-layout-main");
+      const readName = (side) =>
+        layout?.querySelector(".board-layout-" + side + " .cc-user-username-component")
+          ?.textContent.trim() || "";
+      top = readName("top");
+      bottom = readName("bottom");
+      // Ratings beside the names, e.g. "(1543)"; absent for unrated or hidden ratings.
+      const readRating = (side) => {
+        const value = Number((layout?.querySelector(
+          ".board-layout-" + side + " [class*='cc-user-rating'], .board-layout-" + side + " .user-tagline-rating",
+        )?.textContent || "").replace(/[^\d]/g, ""));
+        return value >= 100 && value <= 3500 ? value : null;
+      };
+      topRating = readRating("top");
+      bottomRating = readRating("bottom");
+    }
+    // Names can carry a title or a rating ("GM name (2510)"): compare the name word.
+    const plain = (value) => (value || "").toLowerCase().replace(/\(.*?\)/g, "").trim().split(/\s+/).at(-1) || "";
+    if (lichess && !top && !bottom) return {};
     const names = { w: flipped ? top : bottom, b: flipped ? bottom : top };
-    // Ratings beside the names, e.g. "(1543)"; absent for unrated or hidden ratings.
-    const readRating = (side) => {
-      const text = layout?.querySelector(
-        ".board-layout-" + side + " [class*='cc-user-rating'], .board-layout-" + side + " .user-tagline-rating",
-      )?.textContent || "";
-      const value = Number(text.replace(/[^\d]/g, ""));
-      return value >= 100 && value <= 3500 ? value : null;
-    };
-    const topRating = readRating("top");
-    const bottomRating = readRating("bottom");
     const ratings = topRating || bottomRating
       ? { w: flipped ? topRating : bottomRating, b: flipped ? bottomRating : topRating }
       : undefined;
-    const profile = document.querySelector('#sidebar-main-menu a[href*="/member/"]');
-    const account = profile?.pathname.split("/").filter(Boolean).at(-1)?.toLowerCase();
-    // Names can carry a title or flag text ("GM name"): match the last word.
-    const plain = (value) => (value || "").toLowerCase().trim().split(/\s+/).at(-1);
-    const match = account && Object.keys(names).find((color) => plain(names[color]) === account);
-    const practiceSite = /^\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/)?play\/(coach|computer)(?:\/|$)/i
+    const account = accountName(lichess);
+    // 1. Your account name matches a player: certain, whatever the orientation.
+    const match = account && ["w", "b"].find((color) => plain(names[color]) === account);
+    // 2. Otherwise, while you play, the site puts your side at the bottom.
+    const practiceSite = !lichess && /^\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/)?play\/(coach|computer)(?:\/|$)/i
       .test(location.pathname);
-    // While you play, Chess.com puts your side at the bottom of the board.
-    const playing = /^\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/)?(?:play\/online|game\/(?:live|daily))(?:\/|$)/i
-      .test(location.pathname) && !account;
-    return {
-      names,
-      ratings,
-      playerColor: match || (practiceSite || playing ? (flipped ? "b" : "w") : undefined),
-    };
+    const playing = !lichess && /^\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/)?(?:play\/online|game\/(?:live|daily))(?:\/|$)/i
+      .test(location.pathname);
+    const key = location.pathname + "|" + [top, bottom].sort().join("|");
+    let playerColor;
+    if (match) playerColor = match;
+    // A known account that matches neither player: you are watching a game.
+    else if (account && top && bottom && !practiceSite) playerColor = undefined;
+    else if (practiceSite || playing)
+      playerColor = decided.key === key && decided.color ? decided.color : (flipped ? "b" : "w");
+    if (playerColor) decided = { key, color: playerColor };
+    return { names, ratings, playerColor };
   }
   function pageBoard() {
     return document.querySelector(

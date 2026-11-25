@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.11.0 · 2026-11-25
+
+### Changed
+
+- **Your side is found more reliably.** Chess Studio reads your username from more places on Chess.com, and from Lichess, and remembers it. When your name matches a player, that side is yours whatever the board orientation. Without a match, your side is the bottom side while you play, and it is now kept for the whole game, so a flipped board or a moving piece no longer swaps it. Board orientation is now decided by most pieces, not by the first piece found.
+- **Lichess players.** Names and ratings are read on Lichess game pages, so the panel can show who is who.
+- **Show opponent arrows** moved from the panel to Settings (Board & arrows). Studio keeps its own switch.
+- **Commentator** comments now appear in the same speech bubble as Coach mode.
+- **Player to move** is marked again by a slim green bar along the left edge of the card.
+
 ## 1.10.4 · 2026-11-25
 
 ### Changed

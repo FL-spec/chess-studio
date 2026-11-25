@@ -136,7 +136,10 @@ export function drawMark(board, lines) {
   return { overlay, position, flipped };
 }
 function orientationFromPieces(board, bounds) {
+  // A majority of pieces decides, so one moving or dragged piece cannot flip it.
+  let flipped = 0, normal = 0;
   for (const piece of board.querySelectorAll(".piece")) {
+    if (piece.matches(".dragging, .animating, [class*='dragging']")) continue;
     const coordinate = Array.from(piece.classList).find((token) =>
       /^square-[1-8][1-8]$/.test(token),
     );
@@ -146,8 +149,8 @@ function orientationFromPieces(board, bounds) {
     const file = Math.floor(
       ((rect.left + rect.width / 2 - bounds.left) / bounds.width) * 8,
     );
-    if (file === 8 - Number(coordinate.at(-2))) return true;
-    if (file === Number(coordinate.at(-2)) - 1) return false;
+    if (file === 8 - Number(coordinate.at(-2))) flipped += 1;
+    else if (file === Number(coordinate.at(-2)) - 1) normal += 1;
   }
-  return false;
+  return flipped > normal;
 }

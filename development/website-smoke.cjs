@@ -188,7 +188,7 @@ try {
  await setSwitch(settings,'Pop-out and pinned evaluation bar',true);
  await evaluation.waitFor();
  await setting(settings,'Board arrows follow').selectOption('selection');
- await popup.getByRole('button',{name:'Show opponent arrows',exact:true}).click();
+ await setSwitch(settings,'Show opponent arrows',false);
  await replyArrow.first().waitFor({state:'detached'});
  await mode(popup,'Human').click();
  await assertPressed(mode(popup,'Human'),true);
@@ -200,7 +200,7 @@ try {
  await popup.getByRole('button',{name:'All moves',exact:true}).click();
  await count(engineArrow,3);
  await mode(popup,'Engine').click();
- await assertPressed(popup.getByRole('button',{name:'Show opponent arrows',exact:true}),false);
+ assert.equal(await popup.getByRole('button',{name:'Show opponent arrows',exact:true}).count(),0);
  await setSwitch(settings,'Automatic board arrows',false);
  await arrows.first().waitFor({state:'detached'});
  await setSwitch(settings,'Automatic board arrows',true);

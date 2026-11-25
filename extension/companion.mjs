@@ -429,6 +429,9 @@ async function followWebsite() {
       const reactionsOnly = !isWebsiteWindow && websiteOptions.view === "reactions";
       const modelRatings = playerRatings(websiteOptions, observation);
       const [moverElo] = moverRatings(modelRatings, observation.fen);
+      // "Show opponent arrows" is a setting for the game panel; Studio keeps its own switch.
+      if (!isWebsiteWindow) for (const lens of Object.values(controls.modes))
+        lens.turn.other = lens.reply.other = websiteOptions.opponentArrows !== false;
       let engineDone;
       const view = {
         followTurn: websiteOptions.arrowSide !== "selection",

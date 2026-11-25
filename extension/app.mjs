@@ -884,6 +884,8 @@ function renderSettings() {
   control(arrows, "Board arrows follow", "Whose moves the arrows show.",
     "arrowSide", recommended([["preview", "Turn with player previews"], ["turn", "Player to move only"], ["selection", "Selected player"]], "preview"),
     siteValues, saveSite("arrowSide"));
+  control(arrows, "Show opponent arrows", "Also draw the other side's replies when arrows follow the selected player.",
+    "opponentArrows", recommended([[true, "On"], [false, "Off"]], true), siteValues, saveSite("opponentArrows"));
   control(arrows, "Board colours", "For Studio and preview boards.",
     "board", recommended([["slate", "Slate"], ["green", "Green"], ["wood", "Wood"]], "slate"), ...prefs());
   control(arrows, "Preview board in panel", "A small board that plays the selected move.",

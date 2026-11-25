@@ -604,7 +604,7 @@ export function renderCompanion(container, board, view, actions = {}) {
   if (view.show) {
     controls.append(group("Analysis mode", engine, human, pro));
     controls.append(group("Board arrows", single, all));
-    if (!view.followTurn) {
+    if (!view.followTurn && studio) {
       showOther.classList.add("arrow-switch");
       controls.append(showOther);
     }
