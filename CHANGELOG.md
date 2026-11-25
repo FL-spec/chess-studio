@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.13.0 · 2026-11-25
+
+### Added
+
+- **The coach reads tactics.** Explanations now name forks, pins, skewers, discovered attacks, discovered and double checks, mate threats, double threats, undefended pieces, winning captures and fair trades. Material is checked with a static exchange evaluation, so "wins a piece" means the piece cannot be taken back safely.
+- **Positional ideas.** Quiet moves are explained by what they do: passed pawns, open and half-open files, the seventh rank, outposts, fianchettos, luft, a loosened king shelter, connected rooks, saving an attacked piece, and the king's role in the endgame.
+- **Clearer mistakes.** When a move leaves a piece without enough protection, the coach names the piece and the reply that takes it.
+- **Great and Miss grades.** "Great" marks the only good move: the second-best move loses at least 15% expected score. "Miss" marks a move that lets the opponent's mistake or blunder go unpunished, and the coach shows the punishing move.
+- **Bigger opening book.** 86 named lines (was 34), including the Evans, Danish and Smith-Morra gambits, the Marshall, the Sveshnikov, Taimanov, Kan and Scheveningen, the Winawer and Tarrasch French, the Benoni and Benko, the Queen's and Bogo-Indian, the Semi-Slav, Tarrasch, Albin, Leningrad Dutch, Réti, King's Indian Attack and more. Every line has a one-sentence main idea, and early positions get the right family name.
+- **Opening traps.** 12 well-known traps (Légal, Scholar's Mate, Fishing Pole, Noah's Ark, Blackburne Shilling, Englund, Lasker, Stafford, Siberian, Caro-Kann smothered mate, Petrov, QGA). The coach warns you before a move that walks into one, and names the trap when either side falls for it.
+
+### Changed
+
+- **Bullet mode changes the settings you see.** Turning it on writes its values into Settings (mode, depth, candidate moves, line length, arrows, preview board). Turning it off puts them back to the defaults; appearance settings are not touched. Changing one of these values by hand, in Settings or in the panel, turns bullet off. The Bullet section explains what it sets.
+- **Faster suggestions on the opponent's turn.** The main search no longer waits for the premove check, which could take up to 2.5 seconds.
+- **No repeated searches for grading.** A request for fewer lines or less depth is answered from a deeper search of the same position, cached or still running. Two engine workers stay warm instead of one.
+
+### Note
+
+- Part of this work (the tactics module, engine reuse and grades) was committed early inside 1.12.2. 1.13.0 completes it.
+
 ## 1.12.2 · 2026-11-25
 
 ### Changed

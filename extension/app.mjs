@@ -4,7 +4,7 @@ import { proSetting } from "./pro-lines.mjs";
 import { gameAccuracy, gradeMove, toCentipawns } from "./gamify.mjs";
 import { createArrowOverlay } from "./board-mark.mjs";
 import { maiaLines, maiaRanks } from "./maia.mjs";
-import { websiteDefaults } from "./website-preferences.mjs";
+import { bulletReset, bulletValues, leavesBullet, websiteDefaults } from "./website-preferences.mjs";
 import { Chess } from "./vendor/chess.mjs";
 import { analyze, score, uci } from "./engine.mjs";
 import { drawBoard, explain, notation, moveVisual } from "./chess-view.mjs";
@@ -731,11 +731,27 @@ function renderSettings() {
   const siteValues = { ...websiteDefaults, ...websiteOptions };
   if (siteValues.lens === "compare") siteValues.lens = "engine";
   const saveSite = (key) => async () => {
-    websiteOptions = { ...websiteOptions, [key]: siteValues[key] };
+    let changes = { [key]: siteValues[key] };
+    // Bullet mode writes its values into the settings, so they show here;
+    // turning it off puts them back to the defaults. Changing one of them by
+    // hand ends bullet mode.
+    if (key === "bullet" || (key === "bulletStyle" && siteValues.bullet))
+      changes = { ...changes, ...(siteValues.bullet ? bulletValues(siteValues) : bulletReset()) };
+    else if (leavesBullet({ ...websiteOptions, bullet: siteValues.bullet, bulletStyle: siteValues.bulletStyle }, key, siteValues[key]))
+      changes.bullet = false;
+    websiteOptions = { ...websiteOptions, ...changes };
+    // Unset Pro balance means "use the named Pro style" again.
+    if ("proBalance" in changes && changes.proBalance === undefined) delete websiteOptions.proBalance;
     try {
       await write("websiteOptions", websiteOptions);
     } catch {
       storageFailure();
+    }
+    if (Object.keys(changes).length > 1) {
+      const scroller = document.scrollingElement;
+      const top = scroller?.scrollTop || 0;
+      renderSettings();
+      if (scroller) scroller.scrollTop = top;
     }
   };
   const recommended = (options, value) => Object.assign([...options], { recommended: value });
@@ -916,7 +932,9 @@ function renderSettings() {
   control(human, "Human line length", "Moves in each human line. Shorter is faster.",
     "humanPlies", recommended([2, 3, 5].map((count) => [count, String(count)]), 2), siteValues, saveSite("humanPlies"));
 
-  const bullet = group("Bullet", "analysis");
+  const bullet = group("Bullet", "analysis", "On: one fast move for bullet games. It sets Default mode to Pro (Human) or Engine, " +
+    "depth 8 or 9, 1–2 candidate moves, 1-move human lines, arrows for the player to move and no preview board. " +
+    "You see these values in the settings above. Off: they go back to the defaults. Changing one of them turns bullet off.");
   control(bullet, "Bullet mode", "One fast suggestion for fast games.",
     "bullet", [[true, "On"], [false, "Off"]], siteValues, saveSite("bullet"));
   control(bullet, "Bullet suggestion", "Human: the move a player would make, checked by Stockfish. Engine: Stockfish only.",

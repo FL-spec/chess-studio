@@ -7,6 +7,7 @@ import { score, uci } from "./engine.mjs";
 import { coachLine, coachPortrait, coachSound, latestReaction } from "./coaches.mjs";
 import { proLines, proMetric, proStyle } from "./pro-lines.mjs";
 import { moveAccuracy } from "./gamify.mjs";
+import { leavesBullet } from "./website-preferences.mjs";
 // Display preferences shared with the Studio settings (UI-only).
 function applyDisplayPreferences(prefs = {}) {
   Object.assign(document.documentElement.dataset, {
@@ -55,7 +56,9 @@ if (globalThis.chrome?.storage?.local) {
 }
 async function setWebsiteOption(key, value) {
   const { websiteOptions = {} } = await chrome.storage.local.get("websiteOptions");
-  await chrome.storage.local.set({ websiteOptions: { ...websiteOptions, [key]: value } });
+  // Changing a setting that bullet mode controls ends bullet mode, as in Settings.
+  const bullet = leavesBullet(websiteOptions, key, value) ? { bullet: false } : {};
+  await chrome.storage.local.set({ websiteOptions: { ...websiteOptions, [key]: value, ...bullet } });
 }
 function viewToggle(current) {
   const group = document.createElement("div");

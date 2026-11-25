@@ -97,3 +97,58 @@ const bestLine = coachLine({ grade: { key: "best", label: "Best", tone: "best" }
 assert.match(bestLine.text, /^(Precise|Correct)\. Develops the knight/);
 assert.equal(bestLine.extra, "Plan: After Nc6, d4");
 console.log("Gamify tests passed: grade thresholds, mate scores, sacrifices, material blunders, streaks, accuracy and coach reactions.");
+
+// Tactics and positional ideas in move explanations.
+const { explain } = await import("../extension/chess-view.mjs");
+const say = (fen, san) => explain(new Chess(fen).move(san));
+assert.match(say("r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1", "Nc7+"), /^Forks the king on e8 and the rook on a8/);
+assert.match(say("rnbqkb1r/ppp2ppp/4pn2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 4", "Bg5"), /^Pins the knight on f6 to the queen/);
+assert.match(say("4q3/8/8/4k3/8/8/8/R5K1 w - - 0 1", "Re1+"), /^Skewers the king on e5/);
+assert.match(say("4k3/8/8/8/8/4N3/8/4R1K1 w - - 0 1", "Nd5+"), /^Discovered check/);
+assert.match(say("4k3/8/8/3n4/8/8/8/3RK3 w - - 0 1", "Rxd5"), /^Takes the undefended knight on d5/);
+assert.match(say("r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4", "Bxc6"), /^Trades the bishop for the knight/);
+assert.match(say("rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 3", "Qh5"), /^Threatens mate with Qxf7#/);
+assert.match(say("8/8/3k4/8/3P4/8/8/4K3 w - - 0 1", "d5"), /passed pawn/);
+assert.match(say("4k3/pp3ppp/8/8/8/8/PP3PPP/R5K1 w - - 0 1", "Rd1"), /open d-file/);
+assert.match(say("3r2k1/5ppp/8/8/8/8/5PPP/6K1 w - - 0 1", "h3"), /luft/);
+assert.match(say("rnbqkbnr/pppppppp/8/8/8/6P1/PPPPPP1P/RNBQKBNR w KQkq - 0 1", "Bg2"), /Fianchettoes/);
+assert.match(say("8/5k2/8/8/8/8/5K2/8 w - - 0 1", "Ke3"), /king toward the centre/);
+const { see } = await import("../extension/tactics.mjs");
+assert.equal(see(new Chess("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1"), "d5", "w"), 1);
+assert.equal(see(new Chess("4k3/8/2p5/3p4/4P3/8/8/4K3 w - - 0 1"), "d5", "w"), 0);
+
+// Great (only move) and Miss grades.
+const { refineGrade } = await import("../extension/gamify.mjs");
+assert.equal(refineGrade(gradeMove(50, 45, true), { beforeCp: 50, secondCp: -250 }).key, "great");
+assert.equal(refineGrade(gradeMove(50, 45, true), { beforeCp: 50, secondCp: 30 }).key, "best");
+assert.equal(refineGrade(gradeMove(300, 120), { beforeCp: 300, opponentErred: true }).key, "miss");
+assert.equal(refineGrade(gradeMove(300, -400), { beforeCp: 300, opponentErred: true }).key, "blunder");
+assert.equal(reactionMood(graded("great", true, 1)), "delighted");
+
+// Opening book coverage and traps.
+const { OPENINGS, openingIdea, openingName, trapAfter, trapAhead } = await import("../extension/book.mjs");
+assert.ok(OPENINGS.length >= 80);
+for (const opening of OPENINGS) assert.ok(openingIdea(opening.name), "idea for " + opening.name);
+const reach = (moves) => { const game = new Chess(); for (const san of moves.split(" ")) game.move(san); return game.fen(); };
+assert.equal(openingName(reach("e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 Nf6 Nc3 e5")), "Sicilian Sveshnikov");
+assert.equal(openingName(reach("e4 e5 Nf3 Nc6 Bc4 Bc5 b4")), "Evans Gambit");
+assert.equal(trapAfter(reach("e4 e5 Nf3 d6 Bc4 Bg4 Nc3 g6 Nxe5 Bxd1")).name, "Légal Trap");
+assert.equal(trapAhead(reach("e4 e5 Bc4 Nc6 Qh5")).bait, "Nf6");
+const fell = coachLine({ grade: { key: "blunder", label: "Blunder", tone: "bad" }, move: { san: "Bxd1" }, mine: false, ply: 10,
+  trap: { name: "Légal Trap", idea: "Mate follows.", punish: "Bxf7+", victimIsMe: false } }, "kai");
+assert.match(fell.text, /Légal Trap.*Bxf7\+/);
+const warned = coachLine({ grade: { key: "book", opening: "Open Game" }, move: { san: "Qh5" }, mine: false, ply: 5,
+  trapAhead: { name: "Scholar's Mate", bait: "Nf6" } }, "nova");
+assert.equal(warned.quiet, false);
+assert.match(warned.text, /Careful: Nf6.*Scholar's Mate/);
+
+// Bullet mode writes its values into the settings and resets them when off.
+const { bulletValues, bulletReset, leavesBullet, websiteDefaults } = await import("../extension/website-preferences.mjs");
+assert.equal(bulletValues({ bulletStyle: "human" }).lens, "pro");
+assert.equal(bulletValues({ bulletStyle: "engine" }).lines, 1);
+assert.equal(bulletReset().depth, websiteDefaults.depth);
+assert.equal(leavesBullet({ bullet: true, bulletStyle: "human" }, "depth", 16), true);
+assert.equal(leavesBullet({ bullet: true, bulletStyle: "human" }, "depth", 8), false);
+assert.equal(leavesBullet({ bullet: true, bulletStyle: "human" }, "elo", 1500), false);
+assert.equal(leavesBullet({ bullet: false }, "depth", 16), false);
+console.log("Coach knowledge tests passed: tactics, Great and Miss grades, opening book, traps and bullet settings.");

@@ -10,7 +10,7 @@ import { findSafePremove, uciOf } from "./premove.mjs";
 import { moverRatings, playerRatings } from "./ratings.mjs";
 import { supported } from "./detect.mjs";
 import { GRADES, gradedTactic, gradeMove, refineGrade, streak, toCentipawns } from "./gamify.mjs";
-import { bookMove, repertoireMove } from "./book.mjs";
+import { bookMove, repertoireMove, trapAfter, trapAhead } from "./book.mjs";
 const api = chrome.storage.local;
 const root = document.getElementById("companion-content");
 const isWebsiteWindow = document.body.classList.contains("website");
@@ -710,6 +710,11 @@ async function gradeMoveOf(view) {
     grade, move, mine, ply: plyOf(last.after), celebrate: mine && grade.tone === "best",
     commentary: moveCommentary(last, grade, best, reply),
   };
+  // Known opening traps: name the one just fallen into, or warn before your move.
+  const trap = trapAfter(last.after);
+  if (trap) entry.trap = { name: trap.name, idea: trap.idea, punish: trap.punish, victimIsMe: trap.victim === (playerColor || last.color) };
+  const ahead = !mine && playerColor ? trapAhead(last.after) : null;
+  if (ahead && ahead.victim === playerColor) entry.trapAhead = { name: ahead.name, bait: ahead.bait };
   // Opening talk: name a new opening once; say when the game leaves the book.
   const earlier = store.history.filter((item) => item.ply < entry.ply);
   if (book) entry.openingIntro = !earlier.some((item) => item.grade.opening === book.name);

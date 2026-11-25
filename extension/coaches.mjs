@@ -66,19 +66,25 @@ export function coachSound(id, seed = 0, avoid = "") {
 export function coachLine(entry, id) {
   const { grade, move, mine, commentary, ply = 0 } = entry;
   const voice = voiceOf(id);
+  // Opening traps: the one just played into, or a warning before your move.
+  const trap = entry.trap
+    ? (entry.trap.victimIsMe ? "That is the " + entry.trap.name + ". " + entry.trap.idea
+      : "They fell for the " + entry.trap.name + "! " + entry.trap.idea + (entry.trap.punish ? " Look for " + entry.trap.punish + "." : ""))
+    : "";
+  const warning = entry.trapAhead ? "Careful: " + entry.trapAhead.bait + " here walks into the " + entry.trapAhead.name + "." : "";
   if (grade.key === "book") {
     const label = "Book · " + spokenName(grade.opening || "Opening theory");
     // A new opening on the board: name it and give its main idea, once.
     const idea = entry.openingIntro ? openingIdea(grade.opening) : "";
-    if (!idea) return { label, text: coachSound(id, ply), quiet: true };
-    const intro = pick(voice.book, ply).replace("{o}", spokenName(grade.opening));
-    return { label, text: intro + " " + idea, extra: "", quiet: false };
+    if (!idea && !warning) return { label, text: coachSound(id, ply), quiet: true };
+    const intro = idea ? pick(voice.book, ply).replace("{o}", spokenName(grade.opening)) + " " + idea : "";
+    return { label, text: [intro, warning].filter(Boolean).join(" "), extra: "", quiet: false };
   }
   const opener = !mine
     ? (grade.key === "blunder" || grade.key === "mistake" ? pick(voice.slip, ply) : "")
     : pick(voice[grade.key] || voice.good, ply);
   // The first move after the opening book says so.
-  const parts = [entry.leftBook && grade.tone !== "bad" ? voice.leave : "", opener, commentary?.reason].filter(Boolean);
+  const parts = [entry.leftBook && grade.tone !== "bad" ? voice.leave : "", opener, trap || commentary?.reason, warning].filter(Boolean);
   // The plan for good moves; the better move for costly ones.
   const extra = grade.tone === "bad" || grade.tone === "warn"
     ? (commentary?.alternative ? "Better: " + commentary.alternative : "")
