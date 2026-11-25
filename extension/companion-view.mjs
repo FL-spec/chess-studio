@@ -918,12 +918,11 @@ export function renderCompanion(container, board, view, actions = {}) {
     info.textContent = !view.show ? "Turn on Show lines or Live analysis to see moves."
       : state.lens !== "human" && view.pending ? "Calculating with Stockfish…"
       : state.lens !== "human" && view.error ? view.error
-      : state.lens === "human" ? (view.humanPending ? "Calculating with Maia-3…" : (view.humanModel || "Local model") + " · Likely moves")
+      : state.lens === "human" ? (view.humanPending ? "Calculating with Maia-3…" : "")
       : view.bullet && state.lens === "pro" ? (view.pro ? "Bullet · Human move" : "Bullet · Checking…")
       : view.bullet ? "Bullet · Engine move"
-      : state.lens === "pro" ? (view.proPending || !view.pro ? "Checking human moves with Stockfish…"
-        : "Pro · " + proStyle(view.proStyle).label + " · " + (view.pro.model || "Human model"))
-      : view.candidates.length ? "Stockfish 19 · Depth " + view.candidates[0].depth : "";
+      : state.lens === "pro" ? (view.proPending || !view.pro ? "Checking human moves with Stockfish…" : "")
+      : "";
     depthBar.hidden = !(state.lens !== "human" && view.searching && view.targetDepth);
     if (!depthBar.hidden) {
       info.textContent = "Stockfish 19 · Depth " + (view.depth || 0) + " / " + view.targetDepth;

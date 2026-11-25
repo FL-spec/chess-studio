@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.10.4 · 2026-11-25
+
+### Changed
+
+- **Player cards.** The colour chip and name are centred together, in larger, bolder text. A short green bar under the name marks the player to move.
+- **Less text above the moves.** The fixed labels "Maia-3 · Likely moves", "Pro · Balanced · Maia-3" and "Stockfish 19 · Depth 16" are gone. Progress messages still show while a search runs.
+
 ## 1.10.3 · 2026-11-25
 
 ### Changed

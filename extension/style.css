@@ -2301,3 +2301,28 @@ select.level-select[hidden] { display: none; }
 body[data-commentator] footer { background: var(--paper); backdrop-filter: none; }
 .panel .position-players .board-player, .position-players .board-player { grid-template-rows: auto; min-height: 40px; }
 .panel .position-players .board-player-chip, .position-players .board-player-chip { grid-row: auto; }
+
+/* ---------- v1.10.4: player cards ---------- */
+/* Colour chip and name centred together, larger and bolder. The player to move
+   gets a short green bar under the name instead of a bar on the left edge. */
+.panel .position-players .board-player, .position-players .board-player {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 4px 12px; text-align: center;
+}
+.panel .position-players .board-player-chip, .position-players .board-player-chip {
+  flex: 0 0 12px; width: 12px; height: 12px;
+}
+.panel .position-players .board-player-name, .position-players .board-player-name {
+  min-width: 0; font-size: 15px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.position-players .board-player[data-active]::after {
+  top: auto; bottom: 5px; left: 50%; right: auto; width: 22px; height: 3px; transform: translateX(-50%);
+  background: var(--live);
+}
+.position-players .board-player { position: relative; }
+.panel .position-players .board-player[data-active]::after,
+.position-players .board-player[data-active]::after {
+  top: auto; bottom: 4px; left: 50%; right: auto; width: 22px; height: 3px; transform: translateX(-50%);
+}
+.panel .position-players .board-player-name { font-size: 14px; }

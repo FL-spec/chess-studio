@@ -151,7 +151,7 @@ try {
  await popup.getByText(/best move a human would really play/).waitFor();
  await help.click();
  await popup.getByText(/strongest move a human would really play/).waitFor({state:'hidden'});
- await popup.getByText(/^Pro · Balanced · /).waitFor();
+ await popup.locator('.analysis-progress').waitFor({state:'detached'});
  await count(rows(popup),3);
  // Pro rows show the evaluation and, for human moves, how often players choose them.
  assert.match(await rows(popup).first().locator('.score').textContent(),/^[+-]?\d+\.\d\d( · \d+%)?$/);
@@ -193,7 +193,7 @@ try {
  await mode(popup,'Human').click();
  await assertPressed(mode(popup,'Human'),true);
  await rows(popup).first().waitFor();
- await popup.getByText('Maia-3 · Likely moves',{exact:true}).waitFor();
+ await popup.locator('.analysis-progress').waitFor({state:'detached'});
  assert.equal(await popup.locator('.panel-evaluation .score').textContent(),whiteScore);
  const humanScores=await rows(popup).locator('.score').allTextContents();
  assert.deepEqual(humanScores.map(parseFloat),humanScores.map(parseFloat).sort((a,b)=>b-a));
