@@ -740,7 +740,7 @@ function renderSettings() {
       current[key] = value;
       save();
     };
-    let input;
+    let input, hint = null;
     const values = options.map(([value]) => value);
     if (values.length === 2 && values.includes(true) && values.includes(false)) {
       input = document.createElement("button");
@@ -774,6 +774,8 @@ function renderSettings() {
         };
         input.append(item);
       }
+      const bestTitle = options.find(([value]) => value === best)?.[1];
+      if (bestTitle !== undefined) hint = label("Recommended: " + bestTitle, "setting-recommended");
     } else {
       input = document.createElement("select");
       for (const [value, title] of options)
@@ -783,6 +785,7 @@ function renderSettings() {
     input.id = id;
     input.setAttribute("aria-label", caption);
     row.append(text, input);
+    if (hint) row.append(hint);
     section.append(row);
   }
   // A slider for numeric settings: the value shows beside it and is saved on release.

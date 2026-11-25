@@ -280,9 +280,9 @@ try {
  await directStudio.close();
  await training.goto('https://www.chess.com/play/coach?source=play_nav');
  await turn(studio,'White to move').waitFor();
- await studio.locator('.board-player[data-color="w"]').getByText('You · White').waitFor();
+ await studio.locator('.board-player[data-color="w"]').and(studio.locator('[title*="You · White"]')).waitFor();
  await training.locator('wc-chess-board').evaluate(board=>board.classList.add('flipped'));
- await studio.locator('.board-player[data-color="b"]').getByText('You · Black').waitFor();
+ await studio.locator('.board-player[data-color="b"]').and(studio.locator('[title*="You · Black"]')).waitFor();
  assert.equal(await studio.locator('.position-board .square').first().getAttribute('data-square'),'h1');
  await setting(settings,'Board arrows follow').selectOption('turn');
  await mode(studio,'Human').click();

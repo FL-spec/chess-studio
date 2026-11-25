@@ -275,6 +275,7 @@ function coachReaction(view) {
       if (line.extra) parts.push(describe(line.extra, "coach-react-extra"));
     }
     state.root.toggleAttribute("data-speaking", !sound);
+    state.root.toggleAttribute("data-empty", lastPly < 0);
     state.bubble.replaceChildren(...parts);
     animate(state.bubble, [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }],
       { duration: 260, delay: 450 + Math.random() * 450, easing: "cubic-bezier(.2,.8,.2,1)", fill: "backwards" });
@@ -379,9 +380,9 @@ function playerLabel(view, color, toMove, onClick) {
   player.dataset.color = color;
   if (color === toMove) player.dataset.active = "";
   player.title = (name || role) + " · " + (role !== side ? role + " · " : "") + side;
+  // One line only: the name (or You / Opponent). The chip shows the colour,
+  // and you are always on the left; the tooltip has the details.
   player.append(describe("", "board-player-chip", "span"), describe(name || role, "board-player-name", "strong"));
-  if (name || role !== side)
-    player.append(describe(name && role !== side ? role + " · " + side : side, "board-player-role", "span"));
   return player;
 }
 

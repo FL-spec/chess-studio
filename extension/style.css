@@ -1586,7 +1586,7 @@ button.reset-settings { margin: 16px 0 32px 42px; background: transparent; }
 .swatches [data-value="green"] .swatch { --sw-light: #ebecd0; --sw-dark: #779556; }
 .swatches [data-value="wood"] .swatch { --sw-light: #f0d9b5; --sw-dark: #b58863; }
 .settings-group::after { content: none; }
-.settings-group:first-of-type .settings-intro::after { content: " A green dot marks the recommended choice."; }
+
 /* Mini-board with the eval bar attached */
 .mini-stage { width: min(100%, 300px); margin: 4px auto 16px; }
 .mini-stage .mini-board { width: 100%; margin: 0; border-radius: 12px 12px 0 0; box-shadow: none; }
@@ -2270,7 +2270,7 @@ select.level-select[hidden] { display: none; }
 .companion .brand .settings-icon svg { width: 20px; height: 20px; }
 /* Coach / Commentator: a small, clean pill switch. */
 .companion .view-toggle {
-  display: inline-flex; width: auto; align-self: flex-start; margin: 0 0 10px; padding: 2px; gap: 0;
+  display: flex; width: fit-content; margin: 0 auto 12px; padding: 2px; gap: 0;
   border-radius: 999px; border: 1px solid var(--rule); background: var(--rail);
 }
 .companion .view-toggle button {
@@ -2280,3 +2280,24 @@ select.level-select[hidden] { display: none; }
 .companion .view-toggle button[aria-checked="true"] {
   background: var(--primary, #0b0b0f); color: var(--onprimary, #fff); box-shadow: none;
 }
+
+/* Settings: the green dot follows the option you chose. */
+.segmented button[data-recommended]::after { content: none; }
+.setting-row .segmented button[aria-checked="true"]::after {
+  content: ""; position: absolute; top: 4px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--best);
+}
+
+/* ---------- v1.10.3: design pass ---------- */
+/* Rows with plain words grow to fit them instead of overlapping the next row. */
+.companion button.move-row-choice:has(.move-gloss) { height: auto; min-height: 48px; }
+/* Player cards hold one line: centre it. */
+.companion .position-players .board-player { align-content: center; align-items: center; min-height: 40px; }
+/* Idle coach: a quiet sound beside the face, with no empty box. */
+.coach-react:not([data-speaking]) .coach-react-bubble { border: 0; background: transparent; padding: 0 4px; }
+.coach-react-bubble:empty, .coach-react[data-empty] .coach-react-bubble { display: none; }
+/* "Your turn" is a soft green tag, so the dark mode switch stays the only dark pill. */
+.turn-owner[data-mine] { color: var(--live); background: color-mix(in srgb, var(--live) 14%, transparent); }
+/* Commentator footer is solid, so text never shows through it. */
+body[data-commentator] footer { background: var(--paper); backdrop-filter: none; }
+.panel .position-players .board-player, .position-players .board-player { grid-template-rows: auto; min-height: 40px; }
+.panel .position-players .board-player-chip, .position-players .board-player-chip { grid-row: auto; }

@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.10.3 · 2026-11-25
+
+### Changed
+
+- **Player names.** Each player shows one line, the name, centred in its card. "You · White" was repeated under the name; the chip shows the colour, and you are always on the left.
+- **Settings.** The green dot now follows the option you choose. A small "Recommended: …" line shows the recommended choice.
+- **Design pass.** The Coach / Commentator switch is centred. "Your turn" is a soft green tag. Move rows with plain words grow to fit, instead of overlapping the next row. The idle coach shows no empty box. The Commentator footer is solid.
+
 ## 1.10.2 · 2026-11-25
 
 ### Changed
