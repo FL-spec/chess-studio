@@ -1,4 +1,5 @@
 // Chess Studio commentators and their reaction poses.
+import { openingIdea, spokenName } from "./book.mjs";
 
 // Each commentator has six animated GIFs and matching stills for the reaction states.
 export const COACHES = [
@@ -13,30 +14,35 @@ export const COACHES = [
 // need no comment (book moves, quiet replies).
 const VOICES = {
   nova: {
+    book: ["Ah, the {o}.", "Here comes the {o}.", "The {o}. Nice."], leave: "Out of book now. Your own ideas from here.",
     brilliant: ["Brilliant!", "What a find!"], best: ["Nice move.", "Well played.", "That's the one."],
     excellent: ["Good choice.", "Solid."], good: ["Fine.", "Reasonable."], inaccuracy: ["Not quite.", "There was better."],
     mistake: ["Careful.", "That one hurts."], blunder: ["Oh no.", "Big slip."], slip: ["They slipped!", "Your chance!"],
     sounds: ["Hm.", "Mm-hm.", "Okay.", "Ah."],
   },
   kai: {
+    book: ["The {o}! Love it.", "We're in the {o}, chat.", "Oh, the {o}!"], leave: "Out of theory, chat! Now it's real chess.",
     brilliant: ["Insane!", "Are you kidding?!"], best: ["Let's go!", "Clean."], excellent: ["Nice, nice.", "Solid stuff."],
     good: ["Playable.", "Sure."], inaccuracy: ["Hmm, sketchy.", "Not the cleanest."], mistake: ["Oof.", "Chat, that's a mistake."],
     blunder: ["No way!", "That's a blunder!"], slip: ["They blundered! Punish it!", "Free stuff!"],
     sounds: ["Yep.", "Uh-huh.", "Okay, okay.", "Mm."],
   },
   theo: {
+    book: ["The {o}. Well known.", "The {o}.", "A main line: the {o}."], leave: "We leave theory here.",
     brilliant: ["Very strong.", "A real sacrifice."], best: ["Precise.", "Correct."], excellent: ["Good.", "Sensible."],
     good: ["Playable.", "Acceptable."], inaccuracy: ["Imprecise.", "Slightly inaccurate."], mistake: ["A mistake.", "This loses ground."],
     blunder: ["A serious error.", "This should lose."], slip: ["An error by your opponent.", "Now be precise."],
     sounds: ["Hm.", "Mm.", "Known.", "Yes."],
   },
   ada: {
+    book: ["This is the {o}.", "The {o}, a classic.", "Let's learn the {o}."], leave: "Out of the book. Now think for yourself.",
     brilliant: ["Beautiful idea!", "Wonderful."], best: ["Textbook.", "Instructive. Well done."], excellent: ["Good thinking.", "Sound."],
     good: ["Reasonable.", "A fine idea."], inaccuracy: ["Let's look again.", "A small inaccuracy."], mistake: ["A lesson here.", "Worth reviewing."],
     blunder: ["Let's study this one.", "A costly error."], slip: ["Notice their error.", "Can you use it?"],
     sounds: ["Hm.", "I see.", "Mm-hm.", "Right."],
   },
   mika: {
+    book: ["Book: the {o}.", "We're in the {o}.", "The {o}, a main line."], leave: "Out of book. New territory.",
     brilliant: ["Spectacular.", "Found it!"], best: ["Top choice.", "Engine approves."], excellent: ["Strong.", "Near the top."],
     good: ["Holds the balance.", "Within range."], inaccuracy: ["A small drop.", "The eval dips."], mistake: ["A clear drop.", "The eval swings."],
     blunder: ["Decisive error.", "The eval collapses."], slip: ["Their error.", "The eval swings your way."],
@@ -60,12 +66,19 @@ export function coachSound(id, seed = 0, avoid = "") {
 export function coachLine(entry, id) {
   const { grade, move, mine, commentary, ply = 0 } = entry;
   const voice = voiceOf(id);
-  if (grade.key === "book")
-    return { label: "Book · " + (grade.opening || "Opening theory"), text: coachSound(id, ply), quiet: true };
+  if (grade.key === "book") {
+    const label = "Book · " + spokenName(grade.opening || "Opening theory");
+    // A new opening on the board: name it and give its main idea, once.
+    const idea = entry.openingIntro ? openingIdea(grade.opening) : "";
+    if (!idea) return { label, text: coachSound(id, ply), quiet: true };
+    const intro = pick(voice.book, ply).replace("{o}", spokenName(grade.opening));
+    return { label, text: intro + " " + idea, extra: "", quiet: false };
+  }
   const opener = !mine
     ? (grade.key === "blunder" || grade.key === "mistake" ? pick(voice.slip, ply) : "")
     : pick(voice[grade.key] || voice.good, ply);
-  const parts = [opener, commentary?.reason].filter(Boolean);
+  // The first move after the opening book says so.
+  const parts = [entry.leftBook && grade.tone !== "bad" ? voice.leave : "", opener, commentary?.reason].filter(Boolean);
   // The plan for good moves; the better move for costly ones.
   const extra = grade.tone === "bad" || grade.tone === "warn"
     ? (commentary?.alternative ? "Better: " + commentary.alternative : "")

@@ -1,6 +1,7 @@
 import { moveEvidence } from "./analysis-evidence.mjs";
 import { createLineOverlay } from "./board-mark.mjs";
-import { drawBoard, moveVisual } from "./chess-view.mjs";
+import { drawBoard, explain, moveVisual } from "./chess-view.mjs";
+import { spokenName } from "./book.mjs";
 import { Chess } from "./vendor/chess.mjs";
 import { score, uci } from "./engine.mjs";
 import { coachLine, coachPortrait, coachSound, latestReaction } from "./coaches.mjs";
@@ -183,7 +184,7 @@ function commentItem(entry) {
   badge.append(describe(grade.symbol, "grade-symbol", "span"), describe(move.san + " · " + grade.label, "", "span"));
   head.append(who, badge);
   const line = coachLine(entry, coachId);
-  item.append(head, describe(line.quiet ? "A main-line move in the " + (entry.grade.opening || "opening") + "." : line.text, "cm-say"));
+  item.append(head, describe(line.quiet ? "A main-line move in the " + (spokenName(entry.grade.opening) || "opening") + "." : line.text, "cm-say"));
   if (line.extra) item.append(describe(line.extra, "cm-example"));
   return item;
 }
@@ -727,8 +728,15 @@ export function renderCompanion(container, board, view, actions = {}) {
       // Your repertoire move: name the opening instead of the route.
       const route = row.book && !view.replyFocus ? visual[1]?.querySelector?.(".move-route") : null;
       if (route) {
-        route.textContent = "Your opening · " + row.book;
+        route.textContent = "Your opening · " + spokenName(row.book);
         button.dataset.book = "";
+      } else if (!studio && !view.replyFocus && row === choices[0]) {
+        // Coach-first: the top move says in plain words what it does.
+        const gloss = visual[1]?.querySelector?.(".move-route");
+        if (gloss) {
+          gloss.textContent = explain(row.sequence[0]);
+          gloss.classList.add("move-gloss");
+        }
       }
       button.append(...visual, describe(row.metric, "score", "span"));
       list.append(button);

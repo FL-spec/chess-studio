@@ -31,7 +31,7 @@ export const OPENINGS = [
   { id: "nimzo-indian", name: "Nimzo-Indian Defence", side: "b", moves: "d4 Nf6 c4 e6 Nc3 Bb4 e3 O-O Bd3 d5 Nf3 c5 O-O Nc6" },
   { id: "grunfeld", name: "Grünfeld Defence", side: "b", moves: "d4 Nf6 c4 g6 Nc3 d5 cxd5 Nxd5 e4 Nxc3 bxc3 Bg7 Nf3 c5" },
   { id: "dutch", name: "Dutch Defence", side: "b", moves: "d4 f5 g3 Nf6 Bg2 e6 Nf3 Be7 O-O O-O c4 d6" },
-  { id: "london-black", name: "Against the London", side: "b", moves: "d4 d5 Bf4 c5 e3 Nc6 c3 Qb6 Qb3 c4 Qc2 Bf5" },
+  { id: "london-black", name: "London System with …c5", side: "b", moves: "d4 d5 Bf4 c5 e3 Nc6 c3 Qb6 Qb3 c4 Qc2 Bf5" },
   // More main lines, so Book grades follow common theory further.
   { id: "caro-advance", name: "Caro-Kann Advance", side: "b", moves: "e4 c6 d4 d5 e5 Bf5 Nf3 e6 Be2 c5 Be3 Nd7 O-O Ne7" },
   { id: "french-advance", name: "French Advance", side: "b", moves: "e4 e6 d4 d5 e5 c5 c3 Nc6 Nf3 Qb6 a3 c4" },
@@ -40,7 +40,7 @@ export const OPENINGS = [
   { id: "two-knights", name: "Two Knights Defence", side: "b", moves: "e4 e5 Nf3 Nc6 Bc4 Nf6 d3 Be7 O-O O-O Re1 d6" },
   { id: "berlin", name: "Ruy Lopez, Berlin", side: "b", moves: "e4 e5 Nf3 Nc6 Bb5 Nf6 O-O Nxe4 d4 Nd6 Bxc6 dxc6 dxe5 Nf5" },
   { id: "qga", name: "Queen's Gambit Accepted", side: "b", moves: "d4 d5 c4 dxc4 e3 Nf6 Bxc4 e6 Nf3 c5 O-O a6" },
-  { id: "kid-london", name: "King's Indian vs London", side: "b", moves: "d4 Nf6 Bf4 g6 e3 Bg7 Nf3 O-O Be2 d6 h3 c5" },
+  { id: "kid-london", name: "London vs King's Indian setup", side: "b", moves: "d4 Nf6 Bf4 g6 e3 Bg7 Nf3 O-O Be2 d6 h3 c5" },
   { id: "jobava", name: "Jobava London", side: "w", moves: "d4 d5 Nc3 Nf6 Bf4 e6 e3 Bd6 Nb5 Bb4+ c3 Ba5" },
   { id: "scotch-gambit", name: "Scotch Gambit", side: "w", moves: "e4 e5 Nf3 Nc6 d4 exd4 Bc4 Nf6 e5 d5 Bb5 Ne4" },
 ];
@@ -84,6 +84,10 @@ const FAMILIES = {
   "d4 Nf6 c4 g6 Nc3": "Indian Defence", "d4 Nf6 c4 e6": "Indian Defence", "d4 d5 c4 e6": "Queen's Gambit Declined",
   "d4 d5 c4 e6 Nc3": "Queen's Gambit Declined", "d4 d5 c4 e6 Nc3 Nf6": "Queen's Gambit Declined",
   "d4 d5 Bf4": "London System", "c4": "English Opening",
+  "e4 c5 Nf3 Nc6": "Sicilian Defence", "e4 c5 Nf3 Nc6 d4": "Open Sicilian", "e4 c5 Nf3 Nc6 d4 cxd4": "Open Sicilian",
+  "e4 c5 Nf3 Nc6 d4 cxd4 Nxd4": "Open Sicilian", "e4 c5 c3": "Sicilian Alapin", "e4 e5 Nf3 Nc6 Bc4": "Italian Game",
+  "e4 e5 Nf3 Nc6 Bc4 Nf6": "Two Knights Defence", "e4 e5 Nf3 Nc6 Bb5": "Ruy Lopez", "e4 e5 Nf3 Nc6 Bb5 Nf6": "Ruy Lopez, Berlin",
+  "e4 e5 Nf3 Nc6 d4": "Scotch Game", "e4 e5 Nf3 Nc6 d4 exd4": "Scotch Game",
 };
 const NAMES = new Map();
 {
@@ -131,4 +135,56 @@ export function repertoireMove(fen, chosen) {
   const options = BOOK.get(key(fen)) || [];
   const found = options.find((item) => ids.includes(item.opening.id) && item.opening.side === turn);
   return found ? { san: found.san, uci: found.uci, name: found.opening.name } : null;
+}
+
+// The main idea of each opening, in one plain sentence, for the coach.
+const IDEAS = {
+  "King's Pawn Opening": "1.e4 takes the center and opens lines for the queen and the bishop.",
+  "Queen's Pawn Opening": "1.d4 takes the center with a pawn the queen already protects.",
+  "Open Game": "Both sides claim the center with a pawn on e4 and e5.",
+  "King's Knight Opening": "The knight develops and attacks the e5 pawn at once.",
+  "Queen's Pawn Game": "Both sides hold the center with pawns on d4 and d5.",
+  "Queen's Gambit": "White offers the c-pawn to pull Black's d-pawn away from the center.",
+  "Queen's Gambit Declined": "Black keeps a solid pawn on d5 and develops calmly behind it.",
+  "Queen's Gambit Accepted": "Black takes the pawn, then gives it back to develop freely.",
+  "Indian Defence": "Black develops the knight first and keeps the pawns flexible.",
+  "King's Indian Defence": "Black lets White build a big center, then hits it with …e5 or …c5.",
+  "Nimzo-Indian Defence": "The bishop pins the c3 knight to stop White from playing e4.",
+  "Grünfeld Defence": "Black gives White the center, then attacks it with pieces and …c5.",
+  "Slav Defence": "Black supports d5 with the c-pawn and keeps the light bishop free.",
+  "Catalan": "White puts the bishop on g2 to press on the long diagonal.",
+  "Dutch Defence": "Black fights for e4 with the f-pawn and often attacks on the kingside.",
+  "London System": "White sets up d4, Bf4 and e3: a solid plan against almost anything.",
+  "London System with …c5": "Black hits d4 at once and often aims the queen at b2.",
+  "London vs King's Indian setup": "Black puts the bishop on g7 and prepares …c5 or …e5.",
+  "Jobava London": "White adds Nc3 to the London and looks at Nb5 against c7.",
+  "English Opening": "1.c4 controls d5 from the side and keeps White's plans flexible.",
+  "Italian Game": "The bishop on c4 aims at f7, Black's weakest square.",
+  "Ruy Lopez": "The bishop pressures the knight that defends e5.",
+  "Ruy Lopez, Berlin": "Black counterattacks e4 and heads for a solid, simple game.",
+  "Scotch Game": "White opens the center at once with d4.",
+  "Scotch Gambit": "White gives a pawn for fast development and attacking chances.",
+  "Vienna Game": "White develops the queen's knight first and keeps f4 in reserve.",
+  "King's Gambit": "White gives the f-pawn to open the f-file and take the center.",
+  "Two Knights Defence": "Black develops fast and counterattacks the e4 pawn.",
+  "Petrov Defence": "Black copies White and attacks e4 instead of defending e5.",
+  "Sicilian Defence": "Black fights for d4 from the side and plays for an unbalanced game.",
+  "Open Sicilian": "White opens the center; Black gets the half-open c-file in return.",
+  "Sicilian Najdorf": "…a6 keeps White's pieces off b5 and prepares …e5 or …b5.",
+  "Sicilian Dragon": "Black puts the bishop on g7 to rule the long diagonal.",
+  "Sicilian Alapin": "White plays c3 to support d4 and build a full pawn center.",
+  "French Defence": "Black builds a solid pawn chain with …e6 and …d5 and hits White's center.",
+  "French Advance": "White gains space with e5; Black attacks the pawn chain with …c5.",
+  "Caro-Kann Defence": "Black supports …d5 with the c-pawn for a solid, sound position.",
+  "Caro-Kann Advance": "White gains space; Black develops the bishop to f5 before …e6.",
+  "Scandinavian Defence": "Black hits e4 at once, and the queen comes out early.",
+  "Pirc Defence": "Black lets White take the center, then strikes back with pieces.",
+};
+
+/** The opening's short name for speech ("Open Game (1…e5)" → "Open Game"). */
+export const spokenName = (name) => String(name || "").replace(/ \(.*\)$/, "");
+
+/** One plain sentence on the opening's main idea, or "". */
+export function openingIdea(name) {
+  return IDEAS[spokenName(name)] || "";
 }

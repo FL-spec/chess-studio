@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.10.0 · 2026-11-25
+
+### Added
+
+- **Opening talk.** When a new opening appears on the board, the coach names it once and gives its main idea, for example "Here comes the Scandinavian Defence. Black hits e4 at once, and the queen comes out early." Each coach says it in their own voice. Your first move after the book is marked, for example "We leave theory here."
+- **Plain words on the top move.** The best move row says what the move does ("Captures the pawn on d5.") instead of only the squares.
+
+### Changed
+
+- **Coach first.** In Coach mode, the coach and speech bubble now sit at the top of the panel, as in Commentator. The coach is larger (88px) and the text is easier to read.
+- **Clearer header.** The settings button is a visible 40px button, and the Coach / Commentator switch is taller with a dark selected side.
+- **Opening names.** More early positions get the right name (Italian Game, Ruy Lopez, Scotch Game, Two Knights, Sicilian with 2…Nc6, Alapin). Two repertoire names are clearer: "London System with …c5" and "London vs King's Indian setup".
+
 ## 1.9.0 · 2026-11-24
 
 ### Added

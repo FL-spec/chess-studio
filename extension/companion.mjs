@@ -694,6 +694,10 @@ async function gradeMoveOf(view) {
     grade, move, mine, ply: plyOf(last.after), celebrate: mine && grade.tone === "best",
     commentary: moveCommentary(last, grade, best, reply),
   };
+  // Opening talk: name a new opening once; say when the game leaves the book.
+  const earlier = store.history.filter((item) => item.ply < entry.ply);
+  if (book) entry.openingIntro = !earlier.some((item) => item.grade.opening === book.name);
+  else if (lastBook && entry.ply - lastBook.ply === 1 && mine) entry.leftBook = true;
   store.history = [...store.history.filter((item) => item.ply < entry.ply), entry]
     .sort((a, b) => a.ply - b.ply).slice(-12);
   if (mine) {

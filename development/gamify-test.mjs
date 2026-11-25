@@ -84,6 +84,14 @@ assert.equal(repertoireMove(START, { w: "" }), null);
 const bookLine = coachLine({ grade: { key: "book", opening: "Italian Game" }, move: { san: "Bc4" }, mine: true, ply: 5 }, "kai");
 assert.equal(bookLine.quiet, true);
 assert.equal(bookLine.label, "Book · Italian Game");
+// A new opening is named once, with its main idea; leaving the book is said.
+const introLine = coachLine({ grade: { key: "book", opening: "Open Game (1…e5)" }, move: { san: "e5" }, mine: false, ply: 2, openingIntro: true }, "nova");
+assert.equal(introLine.quiet, false);
+assert.equal(introLine.label, "Book · Open Game");
+assert.match(introLine.text, /Open Game.*e4 and e5/);
+const leftLine = coachLine({ grade: { key: "good", label: "Good", tone: "good" }, move: { san: "h3" }, mine: true, ply: 9, leftBook: true,
+  commentary: { reason: "Stops a pin on g4." } }, "theo");
+assert.match(leftLine.text, /^We leave theory here\. /);
 const bestLine = coachLine({ grade: { key: "best", label: "Best", tone: "best" }, move: { san: "Nf3" }, mine: true, ply: 3,
   commentary: { reason: "Develops the knight to f3.", example: "After Nc6, d4" } }, "theo");
 assert.match(bestLine.text, /^(Precise|Correct)\. Develops the knight/);

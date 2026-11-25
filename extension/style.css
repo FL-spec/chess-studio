@@ -2251,3 +2251,25 @@ select.level-select[hidden] { display: none; }
 .setting-text > label, .setting-text > .setting-name { font-size: 16px; font-weight: 700; color: var(--ink); }
 .setting-help { font-size: 14px; line-height: 1.45; }
 .settings-intro { font-size: 15px; line-height: 1.5; }
+
+/* ---------- v1.10.0: Coach first, clear header controls ---------- */
+/* The coach sits at the top of the Coach panel, as in Commentator. */
+.companion .position-heading > .coach-react { order: -1; margin: 0 0 10px; }
+.companion .position-heading > .coach-react .coach-react-figure { width: 88px; height: 88px; }
+.coach-react-label { font-size: 13px; }
+.coach-react-say { font-size: 15px; line-height: 1.5; }
+.coach-react-extra { font-size: 14px; }
+/* The top move explains itself in plain words. */
+.move-route.move-gloss { color: var(--ink); opacity: .8; white-space: normal; line-height: 1.4; }
+/* Settings button and panel mode switch: same height, same shape, easy to see. */
+.companion .brand .settings-icon {
+  width: 40px; height: 40px; border-radius: 12px; color: var(--ink);
+  background: var(--rail); border: 1px solid var(--rule);
+}
+.companion .brand .settings-icon:hover { background: var(--paper); box-shadow: 0 1px 3px #101d3424; }
+.companion .brand .settings-icon svg { width: 20px; height: 20px; }
+.companion .view-toggle { padding: 4px; border: 1px solid var(--rule); }
+.companion .view-toggle button { min-height: 38px; font-size: 15px; color: color-mix(in srgb, var(--ink) 70%, transparent); }
+.companion .view-toggle button[aria-checked="true"] {
+  background: var(--primary, #0b0b0f); color: var(--onprimary, #fff); box-shadow: 0 1px 3px #0b0b0f33;
+}
