@@ -7,7 +7,7 @@ import { maiaLines, maiaRanks } from "./maia.mjs";
 import { bulletReset, bulletValues, leavesBullet, websiteDefaults } from "./website-preferences.mjs";
 import { Chess } from "./vendor/chess.mjs";
 import { analyze, score, uci } from "./engine.mjs";
-import { drawBoard, explain, notation, moveVisual } from "./chess-view.mjs";
+import { drawBoard, explain, notation, moveVisual, choosePromotion } from "./chess-view.mjs";
 import { moveEvidence } from "./analysis-evidence.mjs";
 import { evaluationMeter } from "./companion-view.mjs";
 import { humanLines } from "./human-lines.mjs";
@@ -218,6 +218,8 @@ function renderBoard() {
     last: board.history({ verbose: true }).at(-1),
     onSquare: interactive ? selectSquare : undefined,
     onDrop: interactive ? dropMove : undefined,
+    annotate: true,
+    check: true,
   });
   const nextMove = preview?.line[preview.index + 1];
   if (nextMove) {
@@ -618,19 +620,14 @@ function selectSquare(square) {
       return;
     }
     if (options.length) {
-      const dialog = $("dialog");
-      dialog.replaceChildren(label("Promote pawn", "dialog-title"));
-      for (const move of options) {
-        const names = { q: "Queen", r: "Rook", b: "Bishop", n: "Knight" };
-        dialog.append(
-          button(names[move.promotion], () => {
-            dialog.close();
-            play(uci(move));
-          }),
-        );
-      }
-      dialog.append(button("Cancel", () => dialog.close()));
-      dialog.showModal();
+      // Promotion: pick the piece on the board, as on chess sites.
+      const from = selected;
+      const position = game.fen();
+      choosePromotion($("board"), square, game.turn(), flipped).then((type) => {
+        const move = type && options.find((option) => option.promotion === type);
+        if (move && game.fen() === position && selected === from) play(uci(move));
+        else if (!move) renderBoard();
+      });
       return;
     }
   }

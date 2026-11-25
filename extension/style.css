@@ -277,14 +277,93 @@ h3 {
 .square.dark {
   background: var(--dark);
 }
+/* Highlights stack as background layers, so last move, selection and check
+   never hide each other, and hovering a square changes nothing. */
 .square.last {
-  box-shadow: inset 0 0 0 100px rgb(245 193 65 / 0.4);
+  background-image: linear-gradient(rgb(245 193 65 / 0.42), rgb(245 193 65 / 0.42));
 }
 .square.selected {
-  box-shadow: inset 0 0 0 3px #0957bd;
+  background-image: linear-gradient(rgb(245 193 65 / 0.62), rgb(245 193 65 / 0.62));
 }
-.square:hover:not(:disabled) {
-  box-shadow: inset 0 0 0 2px rgb(28 51 77 / 0.5);
+.square.check {
+  background-image: radial-gradient(circle, rgb(230 40 30 / 0.95) 0%, rgb(230 40 30 / 0.6) 28%, rgb(230 40 30 / 0) 72%);
+}
+.square.last.check, .square.selected.check {
+  background-image: radial-gradient(circle, rgb(230 40 30 / 0.95) 0%, rgb(230 40 30 / 0.6) 28%, rgb(230 40 30 / 0) 72%),
+    linear-gradient(rgb(245 193 65 / 0.42), rgb(245 193 65 / 0.42));
+}
+.board-interactive {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.board-interactive .square,
+.board-interactive .square:hover:not(:disabled) {
+  cursor: default;
+  color: inherit;
+  border: 0;
+}
+.board-interactive .square.movable { cursor: grab; }
+.board-dragging, .board-dragging .square, .board-dragging .square.movable { cursor: grabbing; }
+.square.drag-over { box-shadow: inset 0 0 0 4px rgb(255 255 255 / 0.75); }
+.square.drag-origin img:not(.capture-ghost) { opacity: 0.35; }
+.drag-piece {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  pointer-events: none;
+  object-fit: contain;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  will-change: transform;
+  filter: drop-shadow(0 4px 6px rgb(0 0 0 / 0.3));
+}
+.board-marks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+.promotion-picker {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: rgb(10 16 24 / 0.35);
+}
+.promotion-column {
+  position: absolute;
+  width: 12.5%;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
+  overflow: hidden;
+}
+.promotion-choice {
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 6%;
+  border: 0;
+  border-radius: 0;
+  display: grid;
+  place-items: center;
+  background: var(--paper);
+}
+.promotion-choice:hover:not(:disabled), .promotion-choice:focus-visible { background: var(--rail); }
+.promotion-choice img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.promotion-cancel {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 4px 0;
+  font-size: 12px;
+  background: var(--rail);
 }
 .square:focus-visible {
   outline-offset: -4px;
@@ -666,12 +745,6 @@ summary {
 }
 .best-explanation {
   margin: 5px 0 8px;
-}
-.square[draggable="true"] {
-  cursor: grab;
-}
-.square[draggable="true"]:active {
-  cursor: grabbing;
 }
 .website {
   width: min(100%, 1120px);
@@ -2383,3 +2456,18 @@ input.setting-text-input:focus-visible { outline: 2px solid var(--focus); outlin
 }
 .move-controls > .move-control-group,
 .move-controls > .move-control-group + .move-control-group { box-sizing: border-box; padding: 3px; }
+
+/* Coach: "See plan" link after a plan line. */
+button.cm-plan-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--blue);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.cm-plan-link:hover { text-decoration: underline; }
+button.cm-plan-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 3px; }

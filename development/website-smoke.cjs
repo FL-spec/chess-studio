@@ -118,7 +118,12 @@ try {
  const engineScores=await rows(popup).locator('.score').allTextContents();
  assert.deepEqual(engineScores.map(Number),engineScores.map(Number).sort((a,b)=>b-a));
  assert.equal(await rows(popup).first().locator('img.move-piece').count(),1);
+ // Until you pick a side, neither player switch is highlighted, whoever is to move.
+ await assertPressed(popup.locator('button.board-player[data-color=w]'),false);
+ await assertPressed(popup.locator('button.board-player[data-color=b]'),false);
+ assert.equal(await popup.locator('button.board-player[data-active]').count(),0);
  await popup.locator('button.board-player[data-color=b]').click();
+ await assertPressed(popup.locator('button.board-player[data-color=b]'),true);
  await popup.getByText(/^Replies after/).waitFor();
  await rows(popup).nth(1).click();
  const reply=await rows(popup).nth(1).getAttribute('data-choice');

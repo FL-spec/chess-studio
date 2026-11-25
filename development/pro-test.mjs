@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Chess } from '../extension/vendor/chess.mjs';
 import { expectedScore, humanCandidates, rankPro, proMetric } from '../extension/pro-lines.mjs';
 import { playerRatings, moverRatings, toModelRating } from '../extension/ratings.mjs';
-import { findSafePremove, uciOf } from '../extension/premove.mjs';
+import { findSafePremove, relevantReplies, uciOf } from '../extension/premove.mjs';
 
 // Expected score follows Lichess's curve, clamped at ±1000 cp; mates are 0 or 1.
 assert.equal(expectedScore({ type: 'cp', value: 0 }), 0.5);
@@ -58,8 +58,10 @@ function engine({ onlyScore = 0 } = {}) {
   const calls = [];
   const analyze = async (position, { count, only }) => {
     calls.push({ fen: position.fen(), count, only });
-    if (only) return [{ type: 'cp', value: onlyScore, pv: [only] }];
-    return position.moves({ verbose: true }).map(reply => {
+    const moves = position.moves({ verbose: true });
+    if (position.turn() === 'w')
+      return only.split(' ').map(id => ({ type: 'cp', value: onlyScore, pv: [id] }));
+    return moves.filter(reply => !only || only.split(' ').includes(uciOf(reply))).map(reply => {
       const after = new Chess(position.fen());
       after.move(reply);
       const answers = after.moves({ verbose: true });
@@ -74,21 +76,30 @@ const found = await findSafePremove(board, { analyze: scripted.analyze, weights 
 assert.equal(found.move, 'e1d1');
 assert.equal(found.san, 'Kxd1');
 assert.ok(found.coverage > .85, String(found.coverage));
-assert.equal(scripted.calls[0].count, board.moves().length);
+// Only the likely replies and every forcing one are searched: Qxd1+ plus the
+// quiet replies until 95% of the probability, in one restricted search.
+assert.ok(scripted.calls[0].count < board.moves().length, String(scripted.calls[0].count));
+assert.ok(scripted.calls[0].only.split(' ').includes('d8d1'));
+assert.equal(found.fen, board.fen());
+// Without weights every reply is checked; with them, captures and checks always are.
+assert.equal(relevantReplies(board.moves({ verbose: true })).length, board.moves().length);
+const rare = new Map([['d8d1', .99]]);
+const kept = relevantReplies(board.moves({ verbose: true }), rare).map(uciOf);
+assert.ok(kept.includes('d8d1') && kept.length < board.moves().length && kept.every(id => board.moves({ verbose: true }).find(m => uciOf(m) === id).san.match(/[x+#]/)), kept.join());
 // Off mode and finished games never search.
 assert.equal(await findSafePremove(board, { analyze: scripted.analyze, mode: 'off' }), null);
 assert.equal(await findSafePremove(new Chess('7k/5QQ1/8/8/8/8/8/K7 b - - 0 1'), { analyze: scripted.analyze }), null);
 // A quiet move that is best against every reply at no cost is the move you
 // would play anyway, so "obvious" mode accepts it too.
 const quiet = new Chess('4k3/8/8/8/8/8/8/R3K3 b - - 0 1');
-const quietEngine = async (position, { only }) => only ? [{ type: 'cp', value: 900, pv: [only] }]
-  : position.moves({ verbose: true }).map(reply => ({ type: 'cp', value: -900, pv: [uciOf(reply), 'a1a7'] }));
+const quietEngine = async (position, { only }) => position.turn() === 'w' && only ? only.split(' ').map(id => ({ type: 'cp', value: 900, pv: [id] }))
+  : position.moves({ verbose: true }).filter(reply => !only || only.split(' ').includes(uciOf(reply))).map(reply => ({ type: 'cp', value: -900, pv: [uciOf(reply), 'a1a7'] }));
 assert.equal((await findSafePremove(quiet, { analyze: quietEngine }))?.move, 'a1a7');
 assert.equal((await findSafePremove(quiet, { analyze: quietEngine, mode: 'safe' }))?.move, 'a1a7');
 // If the premove would be a blunder after some reply, nothing is shown.
 const risky = new Chess('3qk3/8/8/8/8/8/8/3QK3 b - - 0 1');
-const riskyEngine = async (position, { only }) => only ? [{ type: 'cp', value: -600, pv: [only] }]
-  : position.moves({ verbose: true }).map(reply => ({ type: 'cp', value: 0, pv: [uciOf(reply), 'd1d7'] }));
+const riskyEngine = async (position, { only }) => position.turn() === 'w' && only ? only.split(' ').map(id => ({ type: 'cp', value: -600, pv: [id] }))
+  : position.moves({ verbose: true }).filter(reply => !only || only.split(' ').includes(uciOf(reply))).map(reply => ({ type: 'cp', value: 0, pv: [uciOf(reply), 'd1d7'] }));
 assert.equal(await findSafePremove(risky, { analyze: riskyEngine, mode: 'safe' }), null);
 // Aborting stops the search.
 const controller = new AbortController();

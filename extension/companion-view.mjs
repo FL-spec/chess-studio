@@ -4,7 +4,7 @@ import { drawBoard, explain, moveVisual } from "./chess-view.mjs";
 import { spokenName } from "./book.mjs";
 import { Chess } from "./vendor/chess.mjs";
 import { score, uci } from "./engine.mjs";
-import { coachFace, coachLine, coachSound, latestReaction } from "./coaches.mjs";
+import { coachFace, coachLine, coachSound, inFeed, latestReaction } from "./coaches.mjs";
 import { proLines, proMetric, proStyle } from "./pro-lines.mjs";
 import { moveAccuracy } from "./gamify.mjs";
 import { leavesBullet } from "./website-preferences.mjs";
@@ -207,7 +207,21 @@ function react(state, found, onShow) {
     state.reactTimer = setTimeout(() => setMood(state, "idle", key), REACTION_HOLD);
   }, delay);
 }
-function commentItem(entry) {
+// "See plan": opens the line review at the position after your move, with
+// the expected reply's line selected, so you can step through the plan.
+function planLink(view, plan, className) {
+  const link = action("See plan →", () => {
+    const query = new URLSearchParams({ fen: plan.fen, move: plan.move });
+    if (view.playerColor === "b" || (!view.playerColor && view.flipped)) query.set("flipped", "1");
+    if (view.source) query.set("source", String(view.source));
+    const url = chrome.runtime.getURL("review.html") + "?" + query;
+    chrome.tabs.create({ url }).catch(() => window.open(url, "_blank"));
+  });
+  link.className = className;
+  link.title = plan.after + ", then " + plan.san + ". " + plan.effect;
+  return link;
+}
+function commentItem(entry, view) {
   const { grade, move, mine, commentary } = entry;
   const item = document.createElement("li");
   item.className = "cm-item";
@@ -215,7 +229,8 @@ function commentItem(entry) {
   if (!mine) item.dataset.opponent = "";
   const head = document.createElement("div");
   head.className = "cm-head";
-  const who = describe(mine ? "You" : "Opponent", "cm-who", "span");
+  const color = move.color || null;
+  const who = describe(playerName(view, color) || (mine ? "You" : "Opponent"), "cm-who", "span");
   const badge = document.createElement("span");
   badge.className = "grade-badge";
   badge.dataset.tone = grade.tone;
@@ -223,7 +238,11 @@ function commentItem(entry) {
   head.append(who, badge);
   const line = coachLine(entry, coachId);
   item.append(head, describe(line.quiet ? "A main-line move in the " + (spokenName(entry.grade.opening) || "opening") + "." : line.text, "cm-say"));
-  if (line.extra) item.append(describe(line.extra, "cm-example"));
+  if (line.extra) {
+    const extra = describe(line.extra + " ", "cm-example");
+    if (line.plan) extra.append(planLink(view, line.plan, "cm-plan-link"));
+    item.append(extra);
+  }
   return item;
 }
 const VISIBLE = 3;
@@ -243,13 +262,15 @@ function reactionCard(view) {
   const history = view.gradeHistory || [];
   if (!state.reactKey && !state.mood) setMood(state, "idle", "");
   react(state, latestReaction(history));
+  // The feed: your moves, plus opponent moves that matter (see inFeed).
+  const shown = history.filter(inFeed);
   // Drop comments for moves no longer on the board (takebacks, new game).
-  const live = new Set(history.map((entry) => entry.move.after));
+  const live = new Set(shown.map((entry) => entry.move.after));
   for (const [key, node] of state.keys) if (!live.has(key)) { node.remove(); state.keys.delete(key); }
-  for (const entry of history) {
+  for (const entry of shown) {
     const key = entry.move.after;
     if (state.keys.has(key)) continue;
-    const item = commentItem(entry);
+    const item = commentItem(entry, view);
     state.keys.set(key, item);
     state.feed.append(item);
     // A short pause makes the commentator feel like it watched the move.
@@ -310,7 +331,11 @@ function coachReaction(view) {
       parts.push(text);
     } else {
       parts.push(describe(line.text, "coach-react-say"));
-      if (line.extra) parts.push(describe(line.extra, "coach-react-extra"));
+      if (line.extra) {
+        const extra = describe(line.extra + " ", "coach-react-extra");
+        if (line.plan) extra.append(planLink(view, line.plan, "cm-plan-link"));
+        parts.push(extra);
+      }
     }
     state.root.toggleAttribute("data-speaking", !sound);
     state.root.toggleAttribute("data-empty", lastPly < 0);
@@ -395,11 +420,15 @@ function premoveChip(view) {
   const chip = document.createElement("div");
   chip.className = "premove-chip";
   chip.setAttribute("role", "status");
-  chip.title = "Stockfish checked this premove against every legal reply. It is the best move after " +
+  // The check covers the likely replies plus every capture, check and promotion.
+  const all = !found.legal || found.replies >= found.legal;
+  chip.title = "Stockfish checked this premove against " +
+    (all ? "every legal reply" : found.replies + " of " + found.legal + " replies: the likely ones plus every capture, check and promotion") +
+    ". It is the best move after " +
     percent(found.coverage) + " of the likely replies and never loses more than " + percent(found.worstLoss || 0) +
     " of the winning chances." + (found.cancelled ? " After " + found.cancelled + " other replies it is illegal, so the site cancels it." : "");
   chip.append(describe("", "premove-icon", "span"), describe("Premove " + found.san, "premove-move", "strong"),
-    describe("Checked against all " + found.replies + " replies", "premove-detail", "span"));
+    describe(all ? "Checked against all " + found.replies + " replies" : "Checked against " + found.replies + " likely and forcing replies", "premove-detail", "span"));
   return chip;
 }
 function action(text, handler) {
@@ -409,19 +438,27 @@ function action(text, handler) {
   button.onclick = handler;
   return button;
 }
+// A player's name: the name on the page, else (for you) the username from
+// Settings. Callers fall back to "You" / "Opponent" / the colour.
+function playerName(view, color) {
+  const name = view.names?.[color] || (color && color === view.playerColor ? view.username : "");
+  return typeof name === "string" ? name.trim() : "";
+}
 function playerLabel(view, color, toMove, onClick) {
   const side = color === "w" ? "White" : "Black";
   const role = view.playerColor ? (color === view.playerColor ? "You" : "Opponent") : side;
-  const name = view.names?.[color];
+  const name = playerName(view, color);
   const player = onClick ? action("", onClick) : document.createElement("div");
   player.className = "board-player";
   player.dataset.color = color;
-  if (color === toMove) player.dataset.active = "";
+  // No "whose turn" highlight: the heading already says it. A player switch
+  // is highlighted only through aria-pressed, which changes when you pick a side.
+  if (color === toMove && !onClick) player.dataset.active = "";
   player.title = (name || role) + " · " + (role !== side ? role + " · " : "") + side;
   // One line only: the name (or You / Opponent). The chip shows the colour,
   // and you are always on the left; the tooltip has the details.
   player.append(describe("", "board-player-chip", "span"),
-    describe(role === "You" ? "You" : name || role, "board-player-name", "strong"));
+    describe(name || role, "board-player-name", "strong"));
   return player;
 }
 
@@ -721,7 +758,8 @@ export function renderCompanion(container, board, view, actions = {}) {
     paint(true);
   }
   function chooseSide(reply) {
-    actions.selectPlayer?.(reply ? other : turn);
+    view.chosenColor = reply ? other : turn;
+    actions.selectPlayer?.(view.chosenColor);
     const wasPreviewing = view.previewSide;
     view.previewSide = true;
     if (view.replyFocus === reply && wasPreviewing) return;
@@ -946,7 +984,7 @@ export function renderCompanion(container, board, view, actions = {}) {
     setPressed(human, state.lens === "human");
     setPressed(pro, state.lens === "pro");
     for (const player of container.querySelectorAll("button.board-player"))
-      setPressed(player, player.dataset.color === (view.replyFocus ? other : turn));
+      setPressed(player, player.dataset.color === view.chosenColor);
     list.classList.toggle("reply-choices", Boolean(view.replyFocus));
     const secondaryColor = view.replyFocus ? turn : other;
     showOther.textContent = view.playerColor

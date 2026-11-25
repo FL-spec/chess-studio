@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.14.0 · 2026-11-25
+
+### Changed
+
+- **The coach talks about your moves.** The feed shows your moves. An opponent's move appears only when it matters to you: a blunder, a Brilliant or Great move, an opening trap, a trap warning for you, or the name of a new opening. The coach no longer reacts to the opponent's smaller mistakes; it is impressed by their Brilliant and Great moves.
+- **Shorter comments.** A comment is the coach's opener plus one sentence, or at most two sentences. Trap comments stay complete.
+- **"See plan" link.** When your good move has a plan, the comment says it briefly ("Plan: Nf3 after e5.") and links to the line review, where you can step through it. Comments without a plan have no link.
+- **Player switches stay still.** The highlighted player changes only when you pick a side. Before that, neither is highlighted. The extra "whose turn" highlight is gone, because the heading already says it.
+- **Your name.** The players and the coach feed show your name from the page, then your username from Settings, and "You" only when neither is known.
+- **Better premoves.** The first check covers the likely replies plus every capture, check and promotion, in one search. All candidates are verified together, one search per reply. Recaptures are always considered. In a 22-position benchmark run alongside the main search, premoves were found in 7 positions (was 5), the median time fell from 292 ms to 184 ms, and no premove was bad. A premove is never shown for a position that has changed. The chip says when it checked the likely and forcing replies rather than all of them.
+- **Studio board works like the board on major chess sites.** Hovering no longer changes the board. Drag and drop uses pointer events: the piece follows the cursor, illegal drops snap back, and it works with touch. Click-to-move, check highlight, right-click arrows (knight arrows bend into an L) and square marks with Shift, Ctrl/Cmd and Alt colours, and a promotion picker on the board instead of a dialog.
+
 ## 1.13.1 · 2026-11-25
 
 ### Changed

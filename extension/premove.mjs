@@ -2,17 +2,20 @@ import { Chess } from "./vendor/chess.mjs";
 import { expectedScore } from "./pro-lines.mjs";
 
 // Safe premoves: while the opponent is thinking, find a move for you that is
-// still good whatever they play. Sites play a premove only if it is legal after
-// the opponent's move and cancel it otherwise, so a premove can fail only when
-// it is legal but bad. Every legal reply is therefore checked with Stockfish.
+// still good whatever they are likely to play. Sites play a premove only if it
+// is legal after the opponent's move and cancel it otherwise, so a premove can
+// fail only when it is legal but bad.
 //
-//   1. One MultiPV search over all of the opponent's replies gives your best
-//      answer to each.
-//   2. The candidate is the answer that is best against the most likely
-//      replies (opponent probabilities from the human model, else uniform).
-//   3. Against every reply after which the candidate is legal, it must lose
-//      less than MAX_LOSS expected score versus your best answer there, which
-//      is below Lichess's inaccuracy threshold (0.05).
+//   1. The replies that matter: the likely ones (human model, until REPLY_MASS
+//      of the probability) plus every capture and check, because forcing moves
+//      are where a premove gets punished. One restricted MultiPV search gives
+//      your best answer to each.
+//   2. Candidates: the answers that are best against the most likely replies,
+//      plus your recaptures when the likeliest reply is a capture.
+//   3. Against every checked reply after which the candidate is legal, it must
+//      lose less than MAX_LOSS expected score versus your best answer there,
+//      which is below Lichess's inaccuracy threshold (0.05). All candidates are
+//      checked in one restricted search per reply position.
 //
 // "obvious" mode accepts only the premoves players make every day:
 // recaptures and captures, checks, promotions, answers to forced replies, and
@@ -20,9 +23,14 @@ import { expectedScore } from "./pro-lines.mjs";
 
 export const MAX_LOSS = 0.04;
 const MAX_REPLIES = 48;
-const MAX_CHECKS = 36;
+const MAX_CANDIDATES = 3;
+const REPLY_MASS = 0.95;
+const REPLY_FLOOR = 0.02;
+const MAX_LIKELY = 14;
 const MIN_COVERAGE = 0.5;
 const NATURAL_COVERAGE = 0.7;
+const NEAR_BEST = 0.01;
+const FORCED_WEIGHT = 0.75;
 
 export const uciOf = (move) => move.from + move.to + (move.promotion || "");
 
@@ -32,26 +40,53 @@ function findMove(board, id) {
   return moves.find(move => move.from + move.to === id.slice(0, 4) && (!move.promotion || move.promotion === "q"));
 }
 
-function obvious(move, replyCount) {
-  return replyCount <= 3 || Boolean(move.captured) || Boolean(move.promotion) || move.san.includes("+") || move.san.includes("#");
+const forcing = (move) => Boolean(move.captured) || Boolean(move.promotion) || /[+#]/.test(move.san);
+// Sites auto-queen premoved promotions, so a promotion candidate is the queen.
+const asPremove = (id) => id.length > 4 ? id.slice(0, 4) + "q" : id;
+
+/** The replies worth checking: likely ones by probability, plus every forcing one. */
+export function relevantReplies(replies, weights) {
+  if (!weights?.size) return replies;
+  const sorted = [...replies].sort((a, b) => (weights.get(uciOf(b)) ?? 0) - (weights.get(uciOf(a)) ?? 0));
+  const total = sorted.reduce((sum, move) => sum + (weights.get(uciOf(move)) ?? 0), 0);
+  if (total <= 0) return replies;
+  const picked = new Set();
+  let mass = 0;
+  for (const move of sorted) {
+    const weight = (weights.get(uciOf(move)) ?? 0) / total;
+    if (picked.size >= MAX_LIKELY || (mass >= REPLY_MASS && weight < REPLY_FLOOR)) break;
+    picked.add(move);
+    mass += weight;
+  }
+  for (const move of replies) if (forcing(move)) picked.add(move);
+  return replies.filter(move => picked.has(move));
 }
 
 /**
  * `board`: chess.js position with the opponent to move.
- * `analyze(board, { depth, count, only, signal })`: Stockfish lines for the side to move.
- * `weights`: Map of reply UCI → probability (optional).
- * Returns null, or { move, san, from, to, replies, checked, cancelled, coverage, worstLoss }.
+ * `analyze(board, { depth, count, only, signal })`: Stockfish lines for the side to move;
+ * `only` may hold several space-separated UCI moves.
+ * `weights`: Map of reply UCI → probability (optional; without it every reply is checked).
+ * Returns null, or { fen, move, san, from, to, replies, checked, cancelled, coverage, worstLoss }.
  */
-export async function findSafePremove(board, { analyze, depth = 10, signal, weights, mode = "obvious" } = {}) {
+export async function findSafePremove(board, { analyze, depth = 10, signal, weights, mode = "obvious", trace } = {}) {
   if (mode === "off" || board.isGameOver()) return null;
-  const replies = board.moves({ verbose: true });
-  if (!replies.length || replies.length > MAX_REPLIES) return null;
-  const lines = await analyze(board, { depth, count: replies.length, signal });
   signal?.throwIfAborted();
+  const all = board.moves({ verbose: true });
+  if (!all.length) return null;
+  const replies = relevantReplies(all, weights);
+  if (replies.length > MAX_REPLIES) return null;
   const fen = board.fen();
-  const weightOf = (id) => weights?.size ? (weights.get(id) ?? 0) : 1 / replies.length;
+  const uniform = !weights?.size;
+  const rawWeight = (id) => uniform ? 1 : (weights.get(id) ?? 0);
+  const total = replies.reduce((sum, move) => sum + rawWeight(uciOf(move)), 0) || 1;
+  // Weights over the checked replies; a checked reply never weighs zero.
+  const weightOf = (id) => Math.max(rawWeight(id) / total, 1e-4);
 
-  // Your best answer and expected score after each reply.
+  const lines = await analyze(board, { depth, count: replies.length, only: replies.map(uciOf).join(" "), signal });
+  signal?.throwIfAborted();
+
+  // Your best answer and expected score after each checked reply.
   const answers = new Map();
   for (const reply of replies) {
     const id = uciOf(reply);
@@ -65,25 +100,53 @@ export async function findSafePremove(board, { analyze, depth = 10, signal, weig
     answers.set(id, {
       after,
       best: line ? 1 - expectedScore(line) : null,
+      bestMate: line?.type === "mate" && line.value < 0,
       answer: line?.pv[1] || null,
-      line,
     });
   }
+  const order = [...answers.keys()].sort((a, b) => weightOf(b) - weightOf(a));
+  const likeliest = order[0];
+  if (!likeliest || answers.get(likeliest).ended) return null;
+  const likelyAfter = answers.get(likeliest).after;
 
   // Candidates: answers ranked by the probability of the replies they answer best.
   const votes = new Map();
-  // Sites auto-queen premoved promotions, so a promotion candidate is the queen.
-  const asPremove = (id) => id.length > 4 ? id.slice(0, 4) + "q" : id;
   for (const [id, info] of answers) {
     if (!info.answer) continue;
     const vote = asPremove(info.answer);
     votes.set(vote, (votes.get(vote) || 0) + weightOf(id));
   }
-  const ranked = [...votes].sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const likeliest = [...answers.keys()].sort((a, b) => weightOf(b) - weightOf(a))[0];
+  const ranked = [...votes].sort((a, b) => b[1] - a[1]).map(([id]) => id);
+  // A recapture on the square of the likeliest capture is always worth a check.
+  const likelyMove = replies.find(move => uciOf(move) === likeliest);
+  if (likelyMove?.captured) {
+    for (const move of likelyAfter.moves({ verbose: true }))
+      if (move.to === likelyMove.to && !ranked.includes(asPremove(uciOf(move)))) ranked.push(asPremove(uciOf(move)));
+  }
+  const candidates = ranked.filter(id => findMove(likelyAfter, id)).slice(0, MAX_CANDIDATES + 1);
+  trace?.({ replies: replies.map(uciOf), likeliest, candidates, answers: [...answers].map(([id, info]) => [id, info.answer, info.best?.toFixed(3)]) });
+  if (!candidates.length) return null;
 
-  let checks = 0;
-  for (const [candidate] of ranked) {
+  // One restricted search per reply position checks every candidate at once.
+  const scores = new Map();
+  async function scoresAfter(id) {
+    if (scores.has(id)) return scores.get(id);
+    const info = answers.get(id);
+    const legal = candidates.map(candidate => findMove(info.after, candidate)).filter(Boolean)
+      .filter(move => uciOf(move) !== info.answer);
+    const result = new Map();
+    if (legal.length) {
+      const checked = await analyze(info.after, { depth, count: legal.length, only: legal.map(uciOf).join(" "), signal });
+      signal?.throwIfAborted();
+      for (const line of checked) result.set(line.pv[0], line);
+    }
+    scores.set(id, result);
+    return result;
+  }
+
+  // Forced replies: the opponent has (almost) one move.
+  const forced = replies.length <= 3 || (!uniform && weightOf(likeliest) >= FORCED_WEIGHT);
+  for (const candidate of candidates) {
     const result = await verify(candidate);
     if (result) return result;
   }
@@ -92,13 +155,14 @@ export async function findSafePremove(board, { analyze, depth = 10, signal, weig
   async function verify(candidate) {
     // The "obvious" test reads the move as it would be played after the most
     // likely reply (a recapture there may be a quiet move after a rare reply).
-    const expected = likeliest && !answers.get(likeliest).ended && findMove(answers.get(likeliest).after, candidate);
+    const expected = findMove(likelyAfter, candidate);
     if (!expected) return null;
     // Not a capture, check or forced answer: still "obvious" when it is the move
     // you would play anyway (best against most replies, at almost no cost).
-    const natural = mode === "obvious" && !obvious(expected, replies.length);
+    const natural = mode === "obvious" && !forced && !forcing(expected);
     let coverage = 0, cancelled = 0, worstLoss = 0, checked = 0;
-    for (const [id, info] of answers) {
+    for (const id of order) {
+      const info = answers.get(id);
       if (info.ended) continue;
       const move = findMove(info.after, candidate);
       if (!move) {
@@ -107,32 +171,33 @@ export async function findSafePremove(board, { analyze, depth = 10, signal, weig
       }
       let loss = 0;
       if (info.answer !== uciOf(move)) {
-        if (info.best == null || ++checks > MAX_CHECKS) return null;
-        const [line] = await analyze(info.after, { depth, count: 1, only: uciOf(move), signal });
-        signal?.throwIfAborted();
-        if (!line) return null;
+        if (info.best == null) return trace?.({ candidate, reject: "no best", id }), null;
+        const line = (await scoresAfter(id)).get(uciOf(move));
+        if (!line) return trace?.({ candidate, reject: "no line", id }), null;
+        // Walking into a forced mate is never safe unless every answer is mated.
+        if (line.type === "mate" && line.value < 0 && !info.bestMate) return null;
         loss = Math.max(0, info.best - expectedScore(line));
-        if (line.type === "mate" && line.value < 0 && !(info.line?.type === "mate")) return null;
       }
-      if (loss > MAX_LOSS) return null;
+      if (loss > MAX_LOSS) return trace?.({ candidate, reject: "loss", id, loss }), null;
       worstLoss = Math.max(worstLoss, loss);
       checked++;
-      if (loss <= 0.01) coverage += weightOf(id);
+      if (loss <= NEAR_BEST) coverage += weightOf(id);
     }
-    const total = [...answers.keys()].reduce((sum, id) => sum + weightOf(id), 0) || 1;
     // It must be playable after the most likely reply and best against most replies.
-    if (!checked || coverage / total < MIN_COVERAGE) return null;
-    if (natural && (coverage / total < NATURAL_COVERAGE || worstLoss > 0.01)) return null;
-    const shown = expected;
+    trace?.({ candidate, checked, coverage, worstLoss, natural });
+    if (!checked || coverage < MIN_COVERAGE) return null;
+    if (natural && (coverage < NATURAL_COVERAGE || worstLoss > NEAR_BEST)) return null;
     return {
-      move: candidate.slice(0, 4) + (shown?.promotion || ""),
-      san: shown?.san || candidate,
+      fen,
+      move: candidate.slice(0, 4) + (expected.promotion || ""),
+      san: expected.san,
       from: candidate.slice(0, 2),
       to: candidate.slice(2, 4),
       replies: replies.length,
+      legal: all.length,
       checked,
       cancelled,
-      coverage: coverage / total,
+      coverage,
       worstLoss,
     };
   }

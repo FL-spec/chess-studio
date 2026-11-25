@@ -441,6 +441,8 @@ async function followWebsite() {
         followTurn: websiteOptions.arrowSide !== "selection",
         previewOnClick: websiteOptions.arrowSide === "preview",
         replyFocus: !websiteOptions.bullet && Boolean(selectedColor && selectedColor !== board.turn()),
+        // The side you picked with the player switch; null until you pick one.
+        chosenColor: websiteOptions.bullet ? null : selectedColor || null,
         fen: observation.fen,
         last: observation.last,
         mode: "website",
@@ -455,6 +457,7 @@ async function followWebsite() {
           observation.automaticArrows,
         flipped: observation.flipped,
         names: observation.names,
+        username: websiteOptions.username || "",
         playerColor: observation.playerColor,
         ratings: observation.ratings,
         modelRatings,
@@ -610,18 +613,23 @@ async function findPremove(view, board, signal) {
   if (premoveMode === "off") return;
   view.premovePending = true;
   try {
-    // Reply weights from the human model, but never wait long for them.
+    // Reply weights from the human model, but never wait long for them: the
+    // local model is instant, and the checked replies depend on the weights.
     const human = await Promise.race([
       predictHuman(board, options, signal, view.maiaError, view.modelRatings),
-      new Promise(resolve => setTimeout(() => resolve(null), 250)),
+      new Promise(resolve => setTimeout(() => resolve(null), 200)),
     ]);
-    const weights = human ? new Map(human.ranks.map(row => [uciOf(row.move), row.probability])) : undefined;
+    const ranks = human?.ranks || humanRanks(board, moverRatings(view.modelRatings, board.fen())[0]);
+    const weights = new Map(ranks.map(row => [uciOf(row.move), row.probability]));
     // Wide positions get a shallower check so it still finishes within the opponent's move.
     const width = board.moves().length;
     const depth = view.bullet ? 8 : Math.max(8, Math.min(width > 30 ? 10 : 12, options.depth - 4));
     // A time budget keeps premoves predictable; the main search waits for it.
     const budget = AbortSignal.any([signal, AbortSignal.timeout(view.bullet ? 1200 : 2500)]);
-    view.premove = await findSafePremove(board, { analyze, depth, signal: budget, weights, mode: premoveMode });
+    const found = await findSafePremove(board, { analyze, depth, signal: budget, weights, mode: premoveMode });
+    // Never show a premove for a position that is no longer on the board.
+    if (signal.aborted || (found && view.fen && found.fen.split(" ")[0] !== view.fen.split(" ")[0])) return;
+    view.premove = found;
   } catch (error) {
     if (signal.aborted) return;
     view.premove = null;

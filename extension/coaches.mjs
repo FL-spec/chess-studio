@@ -81,20 +81,52 @@ export function coachLine(entry, id) {
     return { label, text: [intro, warning].filter(Boolean).join(" "), extra: "", quiet: false };
   }
   const opener = !mine
-    ? (grade.key === "blunder" || grade.key === "mistake" ? pick(voice.slip, ply) : "")
+    ? (grade.key === "blunder" || grade.key === "mistake" ? pick(voice.slip, ply)
+      : grade.key === "brilliant" ? "A brilliant move from your opponent."
+      : grade.key === "great" ? "A strong move from your opponent." : "")
     : pick(voice[grade.key] || voice.good, ply);
-  // The first move after the opening book says so.
-  const parts = [entry.leftBook && grade.tone !== "bad" ? voice.leave : "", opener, trap || commentary?.reason, warning].filter(Boolean);
-  // The plan for good moves; the better move for costly ones.
-  const extra = grade.tone === "bad" || grade.tone === "warn"
-    ? (commentary?.alternative ? "Better: " + commentary.alternative : "")
-    : (commentary?.example ? "Plan: " + commentary.example : "");
+  // Short: the opener plus the first sentence of the reason. Leaving the book
+  // is said only when there is nothing else to say.
+  // On the first move out of the book, "we leave theory" replaces a generic opener.
+  const leaving = entry.leftBook && grade.tone !== "bad" && grade.tone !== "warn";
+  // A trap comment is complete on its own (name, idea, punishing move).
+  const lead = trap ? "" : leaving ? voice.leave : opener;
+  const reason = trap || brief(commentary?.reason || "", lead ? 1 : 2);
+  const parts = [lead, reason, warning].filter(Boolean);
+  // The plan for your good moves (with a link to the line); the better move for costly ones.
+  const costly = grade.tone === "bad" || grade.tone === "warn";
+  const plan = !costly && mine ? commentary?.plan || null : null;
+  const extra = costly
+    ? (commentary?.alternative ? "Better: " + brief(commentary.alternative, 1) : "")
+    : plan ? "Plan: " + plan.san + " after " + plan.after + "."
+    : (mine && commentary?.example ? "Plan: " + commentary.example : "");
   return {
     label: (mine ? "" : "Opponent · ") + move.san + " · " + grade.label,
     text: parts.join(" "),
     extra,
+    plan,
     quiet: false,
   };
+}
+
+// The first `count` sentences of a comment.
+export function brief(text, count = 1) {
+  const sentences = String(text).match(/[^.!?]+(?:[.!?]+|$)/g) || [];
+  return sentences.slice(0, count).join("").trim();
+}
+
+/**
+ * Whether a graded move belongs in the coach's feed. The coach talks about
+ * your moves. An opponent's move appears only when it matters to you: a
+ * blunder, a Brilliant or Great move, a trap, a trap warning for you, or the
+ * name of a new opening.
+ */
+export function inFeed(entry) {
+  if (!entry) return false;
+  if (entry.mine) return true;
+  const key = entry.grade?.key;
+  return key === "blunder" || key === "brilliant" || key === "great" ||
+    Boolean(entry.trap || entry.trapAhead || (key === "book" && entry.openingIntro));
 }
 
 export const MOOD_BY_GRADE = {
@@ -108,13 +140,14 @@ const STRONG = new Set(["brilliant", "great", "best", "excellent"]);
  * The coach's mood for a graded move, or null when the move does not matter
  * enough to react to. `streak` is the run of strong moves ending at this move.
  * Your move: brilliant, inaccuracy, mistake, blunder, or a streak milestone.
- * Opponent move: only their mistakes and blunders.
+ * Opponent move: only their blunders, Brilliant and Great moves.
  */
 export function reactionMood(entry, streak = 0) {
   const key = entry?.grade?.key;
   if (!key) return null;
   if (key === "book") return null;
-  if (!entry.mine) return key === "blunder" ? "delighted" : key === "mistake" ? "happy" : null;
+  // Opponent: a blunder pleases the coach; a Brilliant or Great move impresses it.
+  if (!entry.mine) return key === "blunder" ? "delighted" : key === "brilliant" ? "shocked" : key === "great" ? "thinking" : null;
   if (key === "brilliant" || key === "great") return "delighted";
   if (key === "blunder" || key === "mistake" || key === "inaccuracy" || key === "miss") return MOOD_BY_GRADE[key];
   if (STRONG.has(key) && STREAK_MILESTONES.has(streak)) return streak >= 5 ? "delighted" : "happy";

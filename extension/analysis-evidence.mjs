@@ -38,6 +38,7 @@ export function moveCommentary(move, grade, best, reply) {
   let reason = explain(played);
   let example;
   let alternative;
+  let plan;
 
   if (grade.tactic && grade.key === "brilliant") {
     const { piece, reply: capture } = grade.tactic;
@@ -62,6 +63,9 @@ export function moveCommentary(move, grade, best, reply) {
     }
   } else if (next && !isCoordinateOnly(explain(next))) {
     example = `After ${response.san}, ${moveDetail(next)}`;
+    // The plan as a line that Studio can show: the position after your move,
+    // starting with the expected reply.
+    plan = { san: next.san, after: response.san, effect: explain(next), fen: played.after, move: uci(response) };
   }
 
   if (grade.key === "miss" && best?.pv?.length) {
@@ -75,7 +79,7 @@ export function moveCommentary(move, grade, best, reply) {
     if (isCoordinateOnly(effect) && plan)
       alternative = `${preferred.san} ${answer.san} ${plan.san} · ${explain(plan)}`;
   }
-  return { reason, example, alternative };
+  return { reason, example, alternative, plan };
 }
 
 function isCoordinateOnly(text) {

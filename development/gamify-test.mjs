@@ -151,4 +151,35 @@ assert.equal(leavesBullet({ bullet: true, bulletStyle: "human" }, "depth", 16), 
 assert.equal(leavesBullet({ bullet: true, bulletStyle: "human" }, "depth", 8), false);
 assert.equal(leavesBullet({ bullet: true, bulletStyle: "human" }, "elo", 1500), false);
 assert.equal(leavesBullet({ bullet: false }, "depth", 16), false);
+// The coach's feed: your moves, and opponent moves only when they matter.
+{
+  const { inFeed, brief } = await import("../extension/coaches.mjs");
+  const g = (key, mine, extra = {}) => ({ grade: { key, tone: "good", label: key }, move: { san: "e4" }, mine, ply: 1, ...extra });
+  assert.equal(inFeed(g("good", true)), true);
+  assert.equal(inFeed(g("inaccuracy", true)), true);
+  assert.equal(inFeed(g("good", false)), false);
+  assert.equal(inFeed(g("mistake", false)), false);
+  assert.equal(inFeed(g("book", false)), false);
+  assert.equal(inFeed(g("book", false, { openingIntro: true })), true);
+  for (const key of ["blunder", "brilliant", "great"]) assert.equal(inFeed(g(key, false)), true, key);
+  assert.equal(inFeed(g("good", false, { trapAhead: { name: "Légal Trap", bait: "Bxd1" } })), true);
+  assert.equal(reactionMood(g("mistake", false)), null);
+  assert.equal(reactionMood(g("brilliant", false)), "shocked");
+  assert.equal(reactionMood(g("great", false)), "thinking");
+  assert.equal(brief("One. Two. Three.", 2), "One. Two.");
+  // A good move's plan is a line Studio can open; the comment stays short.
+  const start = new Chess();
+  const played = start.move("e4");
+  const note = moveCommentary(played, gradeMove(30, 27, true), { pv: ["e2e4"] }, { type: "cp", value: 30, pv: ["e7e5", "g1f3", "b8c6"] });
+  assert.ok(note.plan, "plan for a quiet good move");
+  assert.equal(note.plan.fen, played.after);
+  assert.equal(note.plan.move, "e7e5");
+  assert.equal(note.plan.san, "Nf3");
+  const said = coachLine({ grade: { key: "good", label: "Good", tone: "good" }, move: { san: "e4", color: "w" }, mine: true, ply: 1, commentary: note }, "theo");
+  assert.equal(said.extra, "Plan: Nf3 after e5.");
+  assert.ok(said.plan);
+  assert.ok(said.text.split(/[.!?]/).filter(Boolean).length <= 2, said.text);
+  const theirs = coachLine({ grade: { key: "good", label: "Good", tone: "good" }, move: { san: "e5" }, mine: false, ply: 2, commentary: note }, "theo");
+  assert.equal(theirs.plan, null);
+}
 console.log("Coach knowledge tests passed: tactics, Great and Miss grades, opening book, traps and bullet settings.");
