@@ -22,13 +22,30 @@ export function expectedScore(cp) {
 export const GRADES = {
   book: { label: "Book", symbol: "", tone: "book" },
   brilliant: { label: "Brilliant", symbol: "!!", tone: "best" },
+  great: { label: "Great", symbol: "!", tone: "best" },
   best: { label: "Best", symbol: "★", tone: "best" },
   excellent: { label: "Excellent", symbol: "!", tone: "good" },
   good: { label: "Good", symbol: "✓", tone: "good" },
   inaccuracy: { label: "Inaccuracy", symbol: "?!", tone: "warn" },
   mistake: { label: "Mistake", symbol: "?", tone: "bad" },
   blunder: { label: "Blunder", symbol: "??", tone: "bad" },
+  miss: { label: "Miss", symbol: "✕", tone: "warn" },
 };
+
+/**
+ * "Great": the only good move. The played move is the engine's best and the
+ * second-best move loses at least 15% expected score (Chess.com's idea of a
+ * great move). "Miss": the opponent just erred and this move lets it go.
+ * `secondCp` is the second line's score from the mover's side, or null.
+ */
+export function refineGrade(grade, { beforeCp, secondCp = null, opponentErred = false } = {}) {
+  if (grade.key === "best" && secondCp !== null && beforeCp > -300 &&
+      expectedScore(beforeCp) - expectedScore(secondCp) >= 0.15)
+    return { ...grade, ...GRADES.great, key: "great" };
+  if (opponentErred && (grade.key === "inaccuracy" || grade.key === "mistake"))
+    return { ...grade, ...GRADES.miss, key: "miss" };
+  return grade;
+}
 
 /**
  * Grade a played move.
@@ -100,7 +117,7 @@ export function streak(grades) {
   for (let index = grades.length - 1; index >= 0; index -= 1) {
     // Book moves neither count nor break the run.
     if (grades[index].key === "book") continue;
-    if (!["brilliant", "best", "excellent"].includes(grades[index].key)) break;
+    if (!["brilliant", "great", "best", "excellent"].includes(grades[index].key)) break;
     count += 1;
   }
   return count;

@@ -1,4 +1,5 @@
 import { Chess } from "./vendor/chess.mjs";
+import { moveIdea, positionalIdea } from "./tactics.mjs";
 const pieceNames = {
   p: "pawn",
   n: "knight",
@@ -46,7 +47,10 @@ export function explain(move) {
   if (move.san.startsWith("O-O"))
     return "Castles the king on " + move.to + " and brings the rook to " + (move.to[0] === "g" ? "f" : "d") + move.to[1] + ".";
   if (move.promotion)
-    return "Promotes the pawn to a " + pieceNames[move.promotion] + ".";
+    return "Promotes the pawn to a " + pieceNames[move.promotion] + (after.inCheck() ? " with check." : ".");
+  // Tactics and material first: forks, pins, discovered attacks, winning captures, threats.
+  const idea = moveIdea(move);
+  if (idea) return idea;
   if (move.captured)
     return (
       "Captures the " +
@@ -73,6 +77,9 @@ export function explain(move) {
       pieceNames[targets[1].type] + " on " + targets[1].square + ".";
   if (after.inCheck())
     return "Checks the king on " + after.findPiece({type: "k", color: after.turn()})[0] + ".";
+  // Quiet moves: a positional idea, unless the move attacks a piece.
+  const quiet = !attacks.some((target) => target.type !== "p") && positionalIdea(move);
+  if (quiet) return quiet;
   if (attacks.length)
     return (
       "Moves the " +

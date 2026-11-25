@@ -15,35 +15,35 @@ export const COACHES = [
 const VOICES = {
   nova: {
     book: ["Ah, the {o}.", "Here comes the {o}.", "The {o}. Nice."], leave: "Out of book now. Your own ideas from here.",
-    brilliant: ["Brilliant!", "What a find!"], best: ["Nice move.", "Well played.", "That's the one."],
+    brilliant: ["Brilliant!", "What a find!"], great: ["Great move! The only one.", "You found it!"], miss: ["You missed their slip.", "There was a punish there."], best: ["Nice move.", "Well played.", "That's the one."],
     excellent: ["Good choice.", "Solid."], good: ["Fine.", "Reasonable."], inaccuracy: ["Not quite.", "There was better."],
     mistake: ["Careful.", "That one hurts."], blunder: ["Oh no.", "Big slip."], slip: ["They slipped!", "Your chance!"],
     sounds: ["Hm.", "Mm-hm.", "Okay.", "Ah."],
   },
   kai: {
     book: ["The {o}! Love it.", "We're in the {o}, chat.", "Oh, the {o}!"], leave: "Out of theory, chat! Now it's real chess.",
-    brilliant: ["Insane!", "Are you kidding?!"], best: ["Let's go!", "Clean."], excellent: ["Nice, nice.", "Solid stuff."],
+    brilliant: ["Insane!", "Are you kidding?!"], great: ["Only move, and you found it!", "Huge find!"], miss: ["Chat, we missed it!", "They blundered and we let it go!"], best: ["Let's go!", "Clean."], excellent: ["Nice, nice.", "Solid stuff."],
     good: ["Playable.", "Sure."], inaccuracy: ["Hmm, sketchy.", "Not the cleanest."], mistake: ["Oof.", "Chat, that's a mistake."],
     blunder: ["No way!", "That's a blunder!"], slip: ["They blundered! Punish it!", "Free stuff!"],
     sounds: ["Yep.", "Uh-huh.", "Okay, okay.", "Mm."],
   },
   theo: {
     book: ["The {o}. Well known.", "The {o}.", "A main line: the {o}."], leave: "We leave theory here.",
-    brilliant: ["Very strong.", "A real sacrifice."], best: ["Precise.", "Correct."], excellent: ["Good.", "Sensible."],
+    brilliant: ["Very strong.", "A real sacrifice."], great: ["The only move. Well found.", "Accurate under pressure."], miss: ["A missed chance.", "You let them off the hook."], best: ["Precise.", "Correct."], excellent: ["Good.", "Sensible."],
     good: ["Playable.", "Acceptable."], inaccuracy: ["Imprecise.", "Slightly inaccurate."], mistake: ["A mistake.", "This loses ground."],
     blunder: ["A serious error.", "This should lose."], slip: ["An error by your opponent.", "Now be precise."],
     sounds: ["Hm.", "Mm.", "Known.", "Yes."],
   },
   ada: {
     book: ["This is the {o}.", "The {o}, a classic.", "Let's learn the {o}."], leave: "Out of the book. Now think for yourself.",
-    brilliant: ["Beautiful idea!", "Wonderful."], best: ["Textbook.", "Instructive. Well done."], excellent: ["Good thinking.", "Sound."],
+    brilliant: ["Beautiful idea!", "Wonderful."], great: ["The one good move. Excellent.", "Well calculated."], miss: ["They erred. Did you see it?", "A chance to punish was there."], best: ["Textbook.", "Instructive. Well done."], excellent: ["Good thinking.", "Sound."],
     good: ["Reasonable.", "A fine idea."], inaccuracy: ["Let's look again.", "A small inaccuracy."], mistake: ["A lesson here.", "Worth reviewing."],
     blunder: ["Let's study this one.", "A costly error."], slip: ["Notice their error.", "Can you use it?"],
     sounds: ["Hm.", "I see.", "Mm-hm.", "Right."],
   },
   mika: {
     book: ["Book: the {o}.", "We're in the {o}.", "The {o}, a main line."], leave: "Out of book. New territory.",
-    brilliant: ["Spectacular.", "Found it!"], best: ["Top choice.", "Engine approves."], excellent: ["Strong.", "Near the top."],
+    brilliant: ["Spectacular.", "Found it!"], great: ["Only move. Found.", "Every other move drops the eval."], miss: ["Missed the punish.", "The swing goes back."], best: ["Top choice.", "Engine approves."], excellent: ["Strong.", "Near the top."],
     good: ["Holds the balance.", "Within range."], inaccuracy: ["A small drop.", "The eval dips."], mistake: ["A clear drop.", "The eval swings."],
     blunder: ["Decisive error.", "The eval collapses."], slip: ["Their error.", "The eval swings your way."],
     sounds: ["Noted.", "Hm.", "Tracking.", "Mm."],
@@ -92,11 +92,11 @@ export function coachLine(entry, id) {
 }
 
 export const MOOD_BY_GRADE = {
-  brilliant: "delighted", best: "happy", excellent: "happy", good: "happy",
-  inaccuracy: "thinking", mistake: "worried", blunder: "shocked",
+  brilliant: "delighted", great: "delighted", best: "happy", excellent: "happy", good: "happy",
+  inaccuracy: "thinking", mistake: "worried", blunder: "shocked", miss: "worried",
 };
 const STREAK_MILESTONES = new Set([3, 5, 8, 12, 20]);
-const STRONG = new Set(["brilliant", "best", "excellent"]);
+const STRONG = new Set(["brilliant", "great", "best", "excellent"]);
 
 /**
  * The coach's mood for a graded move, or null when the move does not matter
@@ -109,8 +109,8 @@ export function reactionMood(entry, streak = 0) {
   if (!key) return null;
   if (key === "book") return null;
   if (!entry.mine) return key === "blunder" ? "delighted" : key === "mistake" ? "happy" : null;
-  if (key === "brilliant") return "delighted";
-  if (key === "blunder" || key === "mistake" || key === "inaccuracy") return MOOD_BY_GRADE[key];
+  if (key === "brilliant" || key === "great") return "delighted";
+  if (key === "blunder" || key === "mistake" || key === "inaccuracy" || key === "miss") return MOOD_BY_GRADE[key];
   if (STRONG.has(key) && STREAK_MILESTONES.has(streak)) return streak >= 5 ? "delighted" : "happy";
   return null;
 }

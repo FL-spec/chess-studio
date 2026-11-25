@@ -9,7 +9,7 @@ import { humanCandidates, proMetric, proSetting, rankPro } from "./pro-lines.mjs
 import { findSafePremove, uciOf } from "./premove.mjs";
 import { moverRatings, playerRatings } from "./ratings.mjs";
 import { supported } from "./detect.mjs";
-import { GRADES, gradedTactic, gradeMove, streak, toCentipawns } from "./gamify.mjs";
+import { GRADES, gradedTactic, gradeMove, refineGrade, streak, toCentipawns } from "./gamify.mjs";
 import { bookMove, repertoireMove } from "./book.mjs";
 const api = chrome.storage.local;
 const root = document.getElementById("companion-content");
@@ -542,17 +542,17 @@ async function followWebsite() {
       attachGrades(view);
       renderedSite = view;
       draw(view);
-      if (!view.bullet) gradeMoveOf(view);
       if (controls.lens === "pro" && !view.replyFocus) {
         // Warm the human model while Stockfish searches.
         if (view.pending) predictHuman(board, websiteOptions, controller.signal, false, modelRatings).catch(() => {});
         view.loadPro?.();
       }
       const runSignal = controller.signal;
-      const premoveRun = view.pending && view.playerColor && board.turn() !== view.playerColor && !view.analysis
-        ? findPremove(view, board, controller.signal) : null;
-      if (view.pending) (premoveRun || Promise.resolve()).then(() => {
-        if (renderedSite !== view || runSignal.aborted) return;
+      if (view.pending && view.playerColor && board.turn() !== view.playerColor && !view.analysis)
+        findPremove(view, board, controller.signal);
+      // The main search runs alongside the premove check, so candidate lines are
+      // not held back while the premove search covers every reply.
+      if (view.pending) {
         // Progressive results: show completed shallow iterations while the search
         // deepens. `view.searching` / `view.depth` / `view.targetDepth` describe it;
         // the final candidates are still the completed target-depth result.
@@ -586,7 +586,10 @@ async function followWebsite() {
             view.error = error.message;
             draw(view);
           });
-      });
+      }
+      // Grade after the main search starts, so grading can reuse it instead of
+      // searching the same position again.
+      if (!view.bullet) gradeMoveOf(view);
     }
   }
   timer = setTimeout(() => followWebsite().catch(showError), 450);
@@ -661,8 +664,9 @@ async function gradeMoveOf(view) {
     store.history = [];
   }
   const depth = Math.min(websiteOptions.depth, GRADE_DEPTH);
-  const [[best], [reply]] = await Promise.all([
-    analyze(new Chess(last.before), { depth, count: 1 }),
+  // Two lines before the move: the second tells a "Great" (only) move apart.
+  const [[best, second], [reply]] = await Promise.all([
+    analyze(new Chess(last.before), { depth, count: 2 }),
     analyze(new Chess(last.after), { depth, count: 1 }),
   ]);
   if (!best?.pv?.length) return;
@@ -674,6 +678,15 @@ async function gradeMoveOf(view) {
   const afterCp = afterGame.isCheckmate() ? 10000 : afterGame.isGameOver() ? 0 : -toCentipawns(reply);
   const beforeCp = toCentipawns(best);
   let grade = gradedTactic(gradeMove(beforeCp, afterCp, wasBest), last, reply, beforeCp, afterCp, wasBest);
+  // "Great" for the only good move; "Miss" when the opponent's last move was a
+  // mistake and this move lets the chance go.
+  const previous = store.history.at(-1);
+  const opponentErred = previous && previous.ply === plyOf(last.after) - 1 && previous.move.color !== last.color &&
+    (previous.grade.key === "mistake" || previous.grade.key === "blunder");
+  if (grade.key !== "brilliant") grade = refineGrade(grade, {
+    beforeCp, opponentErred,
+    secondCp: second?.pv?.length ? toCentipawns(second) : null,
+  });
   // Opening theory is graded "Book", as on Chess.com, unless it loses material.
   const ply = plyOf(last.after);
   let book = ply <= 30 && grade.tone !== "bad" ? bookMove(last.before, last.san) : null;

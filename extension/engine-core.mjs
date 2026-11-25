@@ -3,7 +3,8 @@
 // first, which clears the hash and history tables: a reused single-threaded worker
 // therefore returns exactly what a fresh one would.
 const ENGINE_URL = "./vendor/stockfish-19-single.js";
-const MAX_IDLE = 1;
+// Two warm workers: the panel search and the premove or grading search often run together.
+const MAX_IDLE = 2;
 const IDLE_MS = 45000;
 const CACHE_SIZE = 64;
 const idle = [];
@@ -119,6 +120,22 @@ function search(command, { depth, count, only, expected }, notify) {
 }
 
 const copy = (lines) => lines.map((line) => ({ ...line, pv: [...line.pv], wdl: line.wdl && [...line.wdl] }));
+const meta = new Map(); // key → { command, depth, count } for cached and running searches
+
+// A finished or running search of the same position that is at least as deep
+// and has at least as many lines. Its first `count` lines answer a smaller
+// request (for example move grading after the panel's MultiPV search), so the
+// position is not searched twice.
+function superior(command, depth, count, expected) {
+  for (const [key, info] of meta) {
+    if (info.command !== command || info.depth < depth || info.count < count) continue;
+    const hit = cache.get(key);
+    if (hit && hit.length >= expected) return { key, lines: hit };
+    const job = running.get(key);
+    if (job && !hit) return { key, job };
+  }
+  return null;
+}
 
 /**
  * Run (or join, or serve from cache) one search. `command` is the UCI
@@ -134,6 +151,18 @@ export function analyzeCommand(command, expected, { depth = 12, count = 3, signa
     if (onProgress) onProgress(copy(hit));
     return Promise.resolve(copy(hit));
   }
+  if (!only && !running.has(key)) {
+    const better = superior(command, depth, count, expected);
+    if (better?.lines) {
+      const lines = copy(better.lines.slice(0, count));
+      if (onProgress) onProgress(lines);
+      return Promise.resolve(lines);
+    }
+    if (better?.job && !onProgress) {
+      // Join the deeper search; leaving it does not cancel it for its other users.
+      return joinJob(better.job, better.key, signal, null).then((lines) => lines.slice(0, count));
+    }
+  }
   let job = running.get(key);
   if (!job) {
     job = { listeners: new Set(), users: 0, latest: null };
@@ -144,14 +173,24 @@ export function analyzeCommand(command, expected, { depth = 12, count = 3, signa
     job.promise = promise;
     job.cancel = cancel;
     running.set(key, job);
+    meta.set(key, { command, depth, count: only ? 0 : count });
     promise.then(({ lines, complete }) => {
       if (!complete) return;
       cache.set(key, lines);
-      if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value);
+      if (cache.size > CACHE_SIZE) {
+        const oldest = cache.keys().next().value;
+        cache.delete(oldest);
+        if (!running.has(oldest)) meta.delete(oldest);
+      }
     }, () => {}).finally(() => {
       if (running.get(key) === job) running.delete(key);
+      if (!cache.has(key)) meta.delete(key);
     });
   }
+  return joinJob(job, key, signal, onProgress);
+}
+
+function joinJob(job, key, signal, onProgress) {
   job.users++;
   if (onProgress) {
     job.listeners.add(onProgress);

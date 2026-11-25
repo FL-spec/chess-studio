@@ -2358,3 +2358,28 @@ input.setting-text-input:focus-visible { outline: 2px solid var(--focus); outlin
 .settings-group[hidden] { display: none; }
 /* No lone info icon: the row shows only with text or the level picker. */
 .status-row:has(> p:empty):not(:has(> select.level-select:not([hidden]))) { display: none; }
+
+/* ---------- Mode and arrow switches: one size ---------- */
+/* Engine / Human / Pro and Selected move / All moves share track, height and type. */
+.move-controls > .move-control-group,
+.panel .move-controls > .move-control-group {
+  display: flex; gap: 2px; padding: 3px; background: var(--rail); border-radius: 10px;
+}
+.move-controls > .move-control-group button,
+.panel .move-controls > .move-control-group button {
+  flex: 1 1 0; min-height: 34px; padding: 4px 10px; border: 0; border-radius: 8px;
+  font-size: 14px; font-weight: 700; line-height: 1.2; color: var(--muted); background: transparent;
+  justify-content: center; text-align: center;
+}
+.move-controls > .move-control-group button[aria-pressed="true"],
+.panel .move-controls > .move-control-group button[aria-pressed="true"] {
+  color: var(--ink); background: var(--paper); box-shadow: 0 1px 3px #101d3424;
+}
+.move-controls > .move-control-group button,
+.panel .move-controls > .move-control-group button,
+.move-controls > .move-control-group + .move-control-group button,
+.panel .move-controls > .move-control-group + .move-control-group button {
+  box-sizing: border-box; height: 34px; min-height: 34px; max-height: 34px;
+}
+.move-controls > .move-control-group,
+.move-controls > .move-control-group + .move-control-group { box-sizing: border-box; padding: 3px; }

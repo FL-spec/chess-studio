@@ -1,6 +1,7 @@
 import { Chess } from "./vendor/chess.mjs";
 import { explain } from "./chess-view.mjs";
 import { uci } from "./engine.mjs";
+import { leftHanging, pieceName } from "./tactics.mjs";
 
 function replay(fen, line, limit) {
   const game = new Chess(fen);
@@ -49,7 +50,12 @@ export function moveCommentary(move, grade, best, reply) {
     if (reply.type === "mate" && reply.value > 0) {
       reason = `${response.san} starts a forced mate for the other side.`;
     } else {
-      reason = `Allows ${response.san}. ${explain(response)}`;
+      // Name the loose piece when the reply takes it.
+      const loose = leftHanging(played).find((item) => item.square === response.to);
+      const lead = loose && response.captured
+        ? `Leaves the ${pieceName(loose.type)} on ${loose.square} without enough protection. `
+        : "";
+      reason = `${lead}Allows ${response.san}. ${explain(response)}`;
       if (followup && (followup.captured || followup.promotion || followup.san.endsWith("+"))) {
         example = `${next.san} ${followup.san} · ${explain(followup)}`;
       }
@@ -58,6 +64,10 @@ export function moveCommentary(move, grade, best, reply) {
     example = `After ${response.san}, ${moveDetail(next)}`;
   }
 
+  if (grade.key === "miss" && best?.pv?.length) {
+    const [punish] = replay(played.before, best.pv, 1);
+    reason = `Their last move could be punished with ${punish.san}. ${explain(punish)}`;
+  }
   if (costly && best?.pv?.length && uci(played) !== best.pv[0]) {
     const [preferred, answer, plan] = replay(played.before, best.pv, 3);
     const effect = explain(preferred);

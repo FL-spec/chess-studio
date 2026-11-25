@@ -100,7 +100,9 @@ function analyzeRemote(command, expected, options) {
 /**
  * Analyse a chess.js board with Stockfish 19. Results are identical to a fresh
  * engine per call; identical concurrent requests share one search, and finished
- * results are cached (LRU) so takebacks and re-renders are instant.
+ * results are cached (LRU) so takebacks and re-renders are instant. A request
+ * for fewer lines or less depth is answered from a deeper search of the same
+ * position when one is cached or running.
  * `onProgress(lines)` (optional) receives every completed iteration (depth 1, 2, …).
  */
 export function analyze(board, options = {}) {

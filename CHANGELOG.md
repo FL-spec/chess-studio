@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.12.2 · 2026-11-25
+
+### Changed
+
+- **One size for the panel switches.** Engine / Human / Pro and Selected move / All moves now share the same track, height (34px buttons), text size and weight.
+
 ## 1.12.1 · 2026-11-25
 
 ### Changed
