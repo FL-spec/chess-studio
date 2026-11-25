@@ -129,4 +129,18 @@ await assert.rejects(findSafePremove(board, { analyze: scripted.analyze, weights
   // Account match wins over a flipped board.
   assert.equal(premoveAllowed({ ...base, flipped: true }, blackToMove), true);
 }
+// Premoves keep the game's moves: an opponent reply that repeats the position
+// a third time ends the game (a draw), so no premove is planned after it.
+{
+  const repeated = new Chess();
+  for (const san of ['Nf3', 'Nf6', 'Ng1', 'Ng8', 'Nf3', 'Nf6', 'Ng1']) repeated.move(san);
+  const drawWeights = new Map(repeated.moves({ verbose: true }).map(move => [uciOf(move), uciOf(move) === 'f6g8' ? .99 : .01 / 19]));
+  let traced = false;
+  const trace = () => { traced = true; };
+  assert.equal(await findSafePremove(repeated, { analyze: engine().analyze, weights: drawWeights, trace }), null);
+  assert.equal(traced, false, 'threefold reply ends the game before any premove is checked');
+  // The same position without its moves does not see the repetition.
+  await findSafePremove(new Chess(repeated.fen()), { analyze: engine().analyze, weights: drawWeights, trace });
+  assert.equal(traced, true, 'a plain position plans a premove');
+}
 console.log('Pro ranking, model ratings and safe premoves passed.');

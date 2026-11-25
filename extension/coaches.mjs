@@ -14,38 +14,48 @@ export const COACHES = [
 // need no comment (book moves, quiet replies).
 const VOICES = {
   nova: {
-    book: ["Ah, the {o}.", "Here comes the {o}.", "The {o}. Nice."], leave: "Out of book now. Your own ideas from here.",
-    brilliant: ["Brilliant!", "What a find!"], great: ["Great move! The only one.", "You found it!"], miss: ["You missed their slip.", "There was a punish there."], best: ["Nice move.", "Well played.", "That's the one."],
-    excellent: ["Good choice.", "Solid."], good: ["Fine.", "Reasonable."], inaccuracy: ["Not quite.", "There was better."],
-    mistake: ["Careful.", "That one hurts."], blunder: ["Oh no.", "Big slip."], slip: ["They slipped!", "Your chance!"],
+    book: ["Ah, the {o}.", "Here comes the {o}.", "The {o}. Classy."], leave: "Out of book. Your ideas now.",
+    brilliant: ["Brilliant! Take a bow.", "Wow. Just wow."], great: ["The only move, and you found it!", "Great find!"],
+    miss: ["They slipped and you looked away.", "A free gift went unopened."],
+    best: ["Nice move.", "That's the one.", "Clean."], excellent: ["Good choice.", "Solid as a rock."], good: ["Fine.", "Reasonable."],
+    inaccuracy: ["Not quite.", "Close, but there was better."], mistake: ["Careful now.", "Ouch, that one stings."],
+    blunder: ["Oh no.", "Let's pretend we didn't see that."], slip: ["They slipped! Pounce.", "Their mistake. Your turn."],
     sounds: ["Hm.", "Mm-hm.", "Okay.", "Ah."],
   },
   kai: {
-    book: ["The {o}! Love it.", "We're in the {o}, chat.", "Oh, the {o}!"], leave: "Out of theory, chat! Now it's real chess.",
-    brilliant: ["Insane!", "Are you kidding?!"], great: ["Only move, and you found it!", "Huge find!"], miss: ["Chat, we missed it!", "They blundered and we let it go!"], best: ["Let's go!", "Clean."], excellent: ["Nice, nice.", "Solid stuff."],
-    good: ["Playable.", "Sure."], inaccuracy: ["Hmm, sketchy.", "Not the cleanest."], mistake: ["Oof.", "Chat, that's a mistake."],
-    blunder: ["No way!", "That's a blunder!"], slip: ["They blundered! Punish it!", "Free stuff!"],
+    book: ["The {o}! Love it.", "We're in the {o}, chat.", "Oh, the {o}!"], leave: "Out of theory, chat. Now it's real chess.",
+    brilliant: ["Chat, clip that!", "Are you kidding me?!"], great: ["Only move, and you found it!", "Huge find!"],
+    miss: ["Chat, we missed it!", "They blundered and we just waved."],
+    best: ["Let's go!", "Clean.", "Big brain."], excellent: ["Nice, nice.", "Solid stuff."], good: ["Playable.", "Sure, why not."],
+    inaccuracy: ["Hmm, sketchy.", "Chat is typing…"], mistake: ["Oof.", "Chat, that's a mistake."],
+    blunder: ["No way!", "Somebody check on them."], slip: ["They blundered! Punish it!", "Free stuff on the board!"],
     sounds: ["Yep.", "Uh-huh.", "Okay, okay.", "Mm."],
   },
   theo: {
     book: ["The {o}. Well known.", "The {o}.", "A main line: the {o}."], leave: "We leave theory here.",
-    brilliant: ["Very strong.", "A real sacrifice."], great: ["The only move. Well found.", "Accurate under pressure."], miss: ["A missed chance.", "You let them off the hook."], best: ["Precise.", "Correct."], excellent: ["Good.", "Sensible."],
-    good: ["Playable.", "Acceptable."], inaccuracy: ["Imprecise.", "Slightly inaccurate."], mistake: ["A mistake.", "This loses ground."],
-    blunder: ["A serious error.", "This should lose."], slip: ["An error by your opponent.", "Now be precise."],
+    brilliant: ["Very strong. I approve.", "A real sacrifice."], great: ["The only move. Well found.", "Accurate under pressure."],
+    miss: ["A missed chance.", "You let them off the hook."],
+    best: ["Precise.", "Correct.", "As I would play."], excellent: ["Good.", "Sensible."], good: ["Playable.", "Acceptable."],
+    inaccuracy: ["Imprecise.", "My coffee went cold."], mistake: ["A mistake.", "This loses ground."],
+    blunder: ["A serious error.", "I've seen worse. Not often."], slip: ["An error by your opponent.", "Now be precise."],
     sounds: ["Hm.", "Mm.", "Known.", "Yes."],
   },
   ada: {
-    book: ["This is the {o}.", "The {o}, a classic.", "Let's learn the {o}."], leave: "Out of the book. Now think for yourself.",
-    brilliant: ["Beautiful idea!", "Wonderful."], great: ["The one good move. Excellent.", "Well calculated."], miss: ["They erred. Did you see it?", "A chance to punish was there."], best: ["Textbook.", "Instructive. Well done."], excellent: ["Good thinking.", "Sound."],
-    good: ["Reasonable.", "A fine idea."], inaccuracy: ["Let's look again.", "A small inaccuracy."], mistake: ["A lesson here.", "Worth reviewing."],
-    blunder: ["Let's study this one.", "A costly error."], slip: ["Notice their error.", "Can you use it?"],
+    book: ["This is the {o}.", "The {o}, a classic.", "Let's learn the {o}."], leave: "Out of the book. Think for yourself.",
+    brilliant: ["Beautiful idea!", "Textbook brilliance."], great: ["The one good move. Excellent.", "Well calculated."],
+    miss: ["They erred. Did you see it?", "A chance to punish was there."],
+    best: ["Textbook.", "Gold star.", "Well done."], excellent: ["Good thinking.", "Sound."], good: ["Reasonable.", "A fine idea."],
+    inaccuracy: ["Let's look again.", "Nearly there."], mistake: ["A lesson here.", "Homework for later."],
+    blunder: ["Let's study this one.", "That's going in the lesson plan."], slip: ["Notice their error.", "Can you use it?"],
     sounds: ["Hm.", "I see.", "Mm-hm.", "Right."],
   },
   mika: {
     book: ["Book: the {o}.", "We're in the {o}.", "The {o}, a main line."], leave: "Out of book. New territory.",
-    brilliant: ["Spectacular.", "Found it!"], great: ["Only move. Found.", "Every other move drops the eval."], miss: ["Missed the punish.", "The swing goes back."], best: ["Top choice.", "Engine approves."], excellent: ["Strong.", "Near the top."],
-    good: ["Holds the balance.", "Within range."], inaccuracy: ["A small drop.", "The eval dips."], mistake: ["A clear drop.", "The eval swings."],
-    blunder: ["Decisive error.", "The eval collapses."], slip: ["Their error.", "The eval swings your way."],
+    brilliant: ["Spectacular.", "The graph just jumped."], great: ["Only move. Found.", "Every other move drops."],
+    miss: ["Missed the punish.", "The swing goes back."],
+    best: ["Top choice.", "Engine approves."], excellent: ["Strong.", "Near the top."], good: ["Holds the balance.", "Within range."],
+    inaccuracy: ["A small drop.", "The eval dips."], mistake: ["A clear drop.", "The eval swings."],
+    blunder: ["Decisive error.", "The eval fell off a cliff."], slip: ["Their error.", "The eval swings your way."],
     sounds: ["Noted.", "Hm.", "Tracking.", "Mm."],
   },
 };
@@ -69,7 +79,7 @@ export function coachLine(entry, id) {
   // Opening traps: the one just played into, or a warning before your move.
   const trap = entry.trap
     ? (entry.trap.victimIsMe ? "That is the " + entry.trap.name + ". " + entry.trap.idea
-      : "They fell for the " + entry.trap.name + "! " + entry.trap.idea + (entry.trap.punish ? " Look for " + entry.trap.punish + "." : ""))
+      : "They fell for the " + entry.trap.name + "! " + brief(entry.trap.idea, 1))
     : "";
   const warning = entry.trapAhead ? "Careful: " + entry.trapAhead.bait + " here walks into the " + entry.trapAhead.name + "." : "";
   if (grade.key === "book") {
@@ -82,7 +92,7 @@ export function coachLine(entry, id) {
   }
   const opener = !mine
     ? (grade.key === "blunder" || grade.key === "mistake" ? pick(voice.slip, ply)
-      : grade.key === "brilliant" ? "A brilliant move from your opponent."
+      : grade.key === "brilliant" ? "Brilliant move by your opponent. Respect."
       : grade.key === "great" ? "A strong move from your opponent." : "")
     : pick(voice[grade.key] || voice.good, ply);
   // Short: the opener plus the first sentence of the reason. Leaving the book
@@ -91,15 +101,15 @@ export function coachLine(entry, id) {
   const leaving = entry.leftBook && grade.tone !== "bad" && grade.tone !== "warn";
   // A trap comment is complete on its own (name, idea, punishing move).
   const lead = trap ? "" : leaving ? voice.leave : opener;
-  const reason = trap || brief(commentary?.reason || "", lead ? 1 : 2);
-  const parts = [lead, reason, warning].filter(Boolean);
-  // The plan for your good moves (with a link to the line); the better move for costly ones.
+  // One short reason. A plain "Moves the rook to d1." adds nothing to a good move.
   const costly = grade.tone === "bad" || grade.tone === "warn";
+  const said = brief(commentary?.reason || "", 1);
+  const reason = trap || (!costly && /^Moves the [a-z]+ to [a-h][1-8]\.$/.test(said) ? "" : said);
+  const parts = [lead, reason, warning].filter(Boolean);
+  // Your good moves get a "See plan" button (no plan text); costly moves name the better move.
   const plan = !costly && mine ? commentary?.plan || null : null;
-  const extra = costly
-    ? (commentary?.alternative ? "Better: " + brief(commentary.alternative, 1) : "")
-    : plan ? "Plan: " + plan.san + " after " + plan.after + "."
-    : (mine && commentary?.example ? "Plan: " + commentary.example : "");
+  const better = costly && mine && commentary?.alternative ? commentary.alternative.split(" · ")[0].split(" ")[0] : "";
+  const extra = better ? "Better was " + better + "." : "";
   return {
     label: (mine ? "" : "Opponent · ") + move.san + " · " + grade.label,
     text: parts.join(" "),
@@ -117,16 +127,16 @@ export function brief(text, count = 1) {
 
 /**
  * Whether a graded move belongs in the coach's feed. The coach talks about
- * your moves. An opponent's move appears only when it matters to you: a
- * blunder, a Brilliant or Great move, a trap, a trap warning for you, or the
- * name of a new opening.
+ * your moves. An opponent's move appears only when it is very bad or very
+ * good: a blunder, a Brilliant move, a trap they fell into, or a trap
+ * warning for you.
  */
 export function inFeed(entry) {
   if (!entry) return false;
-  if (entry.mine) return true;
+  // Your moves, except quiet book moves ("A main-line move…" over and over).
+  if (entry.mine) return entry.grade?.key !== "book" || Boolean(entry.openingIntro || entry.trapAhead || entry.trap);
   const key = entry.grade?.key;
-  return key === "blunder" || key === "brilliant" || key === "great" ||
-    Boolean(entry.trap || entry.trapAhead || (key === "book" && entry.openingIntro));
+  return key === "blunder" || key === "brilliant" || Boolean(entry.trap || entry.trapAhead);
 }
 
 export const MOOD_BY_GRADE = {
@@ -140,14 +150,14 @@ const STRONG = new Set(["brilliant", "great", "best", "excellent"]);
  * The coach's mood for a graded move, or null when the move does not matter
  * enough to react to. `streak` is the run of strong moves ending at this move.
  * Your move: brilliant, inaccuracy, mistake, blunder, or a streak milestone.
- * Opponent move: only their blunders, Brilliant and Great moves.
+ * Opponent move: only their blunders and Brilliant moves.
  */
 export function reactionMood(entry, streak = 0) {
   const key = entry?.grade?.key;
   if (!key) return null;
   if (key === "book") return null;
-  // Opponent: a blunder pleases the coach; a Brilliant or Great move impresses it.
-  if (!entry.mine) return key === "blunder" ? "delighted" : key === "brilliant" ? "shocked" : key === "great" ? "thinking" : null;
+  // Opponent: a blunder pleases the coach; a Brilliant move impresses it.
+  if (!entry.mine) return key === "blunder" ? "delighted" : key === "brilliant" ? "shocked" : null;
   if (key === "brilliant" || key === "great") return "delighted";
   if (key === "blunder" || key === "mistake" || key === "inaccuracy" || key === "miss") return MOOD_BY_GRADE[key];
   if (STRONG.has(key) && STREAK_MILESTONES.has(streak)) return streak >= 5 ? "delighted" : "happy";

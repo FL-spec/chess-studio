@@ -82,6 +82,15 @@ export function relevantReplies(replies, weights, always = new Set()) {
  * `weights`: Map of reply UCI → probability (optional; without it every reply is checked).
  * Returns null, or { fen, move, san, from, to, replies, checked, cancelled, coverage, worstLoss }.
  */
+// A copy of the board with its move history (a plain FEN copy forgets
+// repetitions).
+function withHistory(board) {
+  const history = board.history({ verbose: true });
+  if (!history.length) return new Chess(board.fen());
+  const copy = new Chess(history[0].before);
+  for (const move of history) copy.move(move.lan);
+  return copy;
+}
 export async function findSafePremove(board, { analyze, depth = 10, signal, weights, mode = "obvious", trace } = {}) {
   if (mode === "off" || board.isGameOver()) return null;
   signal?.throwIfAborted();
@@ -110,7 +119,9 @@ export async function findSafePremove(board, { analyze, depth = 10, signal, weig
   const answers = new Map();
   for (const reply of replies) {
     const id = uciOf(reply);
-    const after = new Chess(fen);
+    // Keep the game's moves so a reply that repeats the position a third
+    // time ends the game, and the engine sees repetitions after it.
+    const after = withHistory(board);
     after.move(reply);
     if (after.isGameOver()) {
       answers.set(id, { after, ended: true });

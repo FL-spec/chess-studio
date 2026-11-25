@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.15.0 · 2026-11-25
+
+### Added
+
+- **The panel knows when the game ends.** Checkmate, stalemate, insufficient material, the 50-move rule and threefold repetition are found from the moves. Resignation, time and agreed draws are read from the result Chess.com or Lichess shows. Suggestions stop, and the panel shows the result for your side ("You won by checkmate", "Draw by repetition") with your accuracy over the whole game.
+- **Game review.** The end-of-game card has one button, **Open in Studio**. It opens a clean review of the whole game: the board with an evaluation bar, accuracy for both players, a count of each grade, an evaluation graph you can click, the move list with grade icons, and the coach explaining each move. For a move that was not the best, it names the best move, and **Show** plays it on the board. Keys: ← →, Home, End. Finished games are kept for review (the last 20), and their analysis is saved, so a second opening is instant.
+
+### Fixed
+
+- **Repetitions in won positions.** The panel sent Stockfish only the position, not the moves, so it could not see that a move repeats the position a third time. In a won position it could recommend a repetition, which draws the game. The panel now keeps the game's moves, from the page's move list or move by move. Stockfish gets them in every game, live games included, and in Studio and Game review: a third repetition scores 0.00 and is not recommended. Premoves see them too: an opponent reply that repeats the position a third time ends the game, so no premove is planned after it. Move grades use the moves in every game, so a repetition that throws away a win is graded as the mistake it is.
+- **The coach no longer talks about the opponent's moves as if they were yours.** When your side was not certain, every move counted as yours. Your side now falls back to the side at the bottom of the board.
+
+### Changed
+
+- **The coach comments on the opponent only for very bad or very good moves:** a blunder, a Brilliant move, or a trap they fell into. Great moves, smaller mistakes and opening names on their moves are left out. Openings are named on your own moves.
+- **Shorter, lighter comments.** A comment is one opener plus at most one short reason, with new lines for every coach. A reason that only says where a piece went ("Moves the rook to d1.") is dropped. Quiet book moves no longer fill the feed. Costly moves say "Better was Nf3." The plan is only the **See plan** button, with no plan text. Trap comments name the trap in one sentence, without a move hint.
+
+### Tests
+
+- New full-game simulation (`development/game-simulation.cjs`): real games replayed move by move on a Chess.com fixture, as White and as Black, checking the coach's comments, the end of the game, the saved review and page errors. It starts with an engine check of the repetition fix.
+- New Game review tests: `development/game-review-test.mjs` (grading, book, Miss, checkmate, threefold repetition, accuracy, cache) and `development/game-review-smoke.cjs` (real Stockfish in Chromium, screenshots).
+
 ## 1.14.2 · 2026-11-25
 
 ### Changed

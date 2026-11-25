@@ -98,11 +98,14 @@ export function reconstruct(
   }
   if (moves.length) {
     const game = new Chess(startFen);
-    let match = matches(game) ? { fen: game.fen() } : undefined;
+    // `history`: the page's moves up to the position on the board, so the
+    // panel knows the whole game (repetitions, the end of the game, review).
+    const start = game.fen();
+    let match = matches(game) ? { fen: game.fen(), history: [], start } : undefined;
     try {
-      for (const san of moves) {
+      for (const [index, san] of moves.entries()) {
         const last = game.move(san);
-        if (matches(game)) match = { fen: game.fen(), last };
+        if (matches(game)) match = { fen: game.fen(), last, history: moves.slice(0, index + 1), start };
       }
       if (match) return match;
     } catch {
@@ -129,6 +132,9 @@ export function reconstruct(
       /* Wait for readable move history or a legal transition. */
     }
   }
+  // An empty move list and the start position: a new game, even when the
+  // last game ended in the same placement.
+  if (!moves.length && matches(start) && previous?.history?.length) return { fen: start.fen(), history: [], start: start.fen() };
   if (previous) {
     const game = new Chess(previous.fen);
     if (matches(game)) return previous;

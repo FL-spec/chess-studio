@@ -238,8 +238,8 @@ function commentItem(entry, view) {
   head.append(who, badge);
   const line = coachLine(entry, coachId);
   item.append(head, describe(line.quiet ? "A main-line move in the " + (spokenName(entry.grade.opening) || "opening") + "." : line.text, "cm-say"));
-  if (line.extra) {
-    const extra = describe(line.extra + " ", "cm-example");
+  if (line.extra || line.plan) {
+    const extra = describe(line.extra ? line.extra + " " : "", "cm-example");
     if (line.plan) extra.append(planLink(view, line.plan, "cm-plan-link"));
     item.append(extra);
   }
@@ -331,8 +331,8 @@ function coachReaction(view) {
       parts.push(text);
     } else {
       parts.push(describe(line.text, "coach-react-say"));
-      if (line.extra) {
-        const extra = describe(line.extra + " ", "coach-react-extra");
+      if (line.extra || line.plan) {
+        const extra = describe(line.extra ? line.extra + " " : "", "coach-react-extra");
         if (line.plan) extra.append(planLink(view, line.plan, "cm-plan-link"));
         parts.push(extra);
       }
@@ -344,6 +344,57 @@ function coachReaction(view) {
       { duration: 260, delay: 450 + Math.random() * 450, easing: "cubic-bezier(.2,.8,.2,1)", fill: "backwards" });
   }
   return state.root;
+}
+// The end of a game: the result in plain words, your accuracy, and one
+// button to the full game review.
+const REASONS = {
+  checkmate: "by checkmate", resignation: "by resignation", time: "on time", abandonment: "by abandonment",
+  stalemate: "by stalemate", repetition: "by repetition", agreement: "by agreement",
+  "insufficient material": "by insufficient material", "50-move rule": "by the 50-move rule",
+};
+export function resultText(end, playerColor) {
+  const how = REASONS[end.reason] ? " " + REASONS[end.reason] : "";
+  if (end.score === "1/2-1/2") return { text: "Draw" + how, outcome: "draw" };
+  const winner = end.score === "1-0" ? "w" : end.score === "0-1" ? "b" : null;
+  if (playerColor && (winner || end.won)) {
+    const won = winner ? winner === playerColor : end.won === "won";
+    return { text: (won ? "You won" : "You lost") + how, outcome: won ? "won" : "lost" };
+  }
+  if (winner) return { text: (winner === "w" ? "White" : "Black") + " won" + how, outcome: "neutral" };
+  return { text: "Game over" + how, outcome: "neutral" };
+}
+const END_LINES = {
+  won: ["GG! Let's see how you did it.", "Victory! Want to relive it?", "Nicely done. Let's look back."],
+  lost: ["Tough one. Let's find the turning point.", "It happens. The review shows where.", "Shake it off. Let's learn from it."],
+  draw: ["A draw. Was there more?", "Peace treaty signed. Let's check it.", "Split the point. Let's see why."],
+  neutral: ["Game over. Let's look back.", "That's the game. Review time?"],
+};
+function gameOverCard(view) {
+  const end = resultText(view.gameOver, view.playerColor || (view.flipped ? "b" : "w"));
+  const card = document.createElement("section");
+  card.className = "game-over";
+  card.dataset.outcome = end.outcome;
+  const figure = document.createElement("div");
+  figure.className = "game-over-face";
+  const mood = end.outcome === "won" ? "delighted" : end.outcome === "lost" ? "worried" : "thinking";
+  const { src, alt } = coachFace(coachId, mood, false);
+  const face = new Image(64, 64);
+  face.src = src;
+  face.alt = alt;
+  face.draggable = false;
+  figure.append(face);
+  const body = document.createElement("div");
+  body.className = "game-over-body";
+  const lines = END_LINES[end.outcome];
+  const seed = (view.fen || "").length + (view.gradeHistory?.length || 0);
+  body.append(describe(end.text, "game-over-result", "h2"), describe(lines[seed % lines.length], "game-over-line"));
+  if (view.accuracy != null) body.append(describe("Your accuracy: " + Math.round(view.accuracy) + "%", "game-over-stat muted"));
+  const open = action("Open in Studio", () => view.openReview?.());
+  open.className = "primary game-over-open";
+  open.disabled = !view.openReview;
+  open.title = "Review every move of this game with the coach";
+  card.append(figure, body, open);
+  return card;
 }
 export function describe(text, cls, tag = "p") {
   const element = document.createElement(tag);
@@ -517,6 +568,22 @@ export function renderCompanion(container, board, view, actions = {}) {
   // The footer's Open Studio button is quieter in Commentator mode.
   if (!studio && isWebsite) document.body.toggleAttribute("data-commentator", Boolean(view.reactionsOnly));
   if (!studio && isWebsite && view.reactionsOnly) document.body.removeAttribute("data-why");
+  if (!studio) document.body.toggleAttribute("data-game-over", Boolean(isWebsite && view.gameOver));
+  if (isWebsite && view.gameOver) {
+    header.querySelector(".game-progress")?.remove();
+    header.querySelector(".premove-chip")?.remove();
+    title.textContent = "Game over";
+    delete title.dataset.turn;
+    container.append(gameOverCard(view));
+    if (view.reactionsOnly) {
+      // The card has the coach and the result: the feed keeps only the comments.
+      const feed = reactionCard(view);
+      feed.dataset.ended = "";
+      container.append(feed);
+    }
+    actions.showArrows?.([], false);
+    return;
+  }
   if (isWebsite && view.reactionsOnly) {
     header.querySelector(".game-progress")?.remove();
     container.append(reactionCard(view));

@@ -9,7 +9,7 @@ import { humanCandidates, proMetric, proSetting, rankPro } from "./pro-lines.mjs
 import { findSafePremove, premoveAllowed, uciOf } from "./premove.mjs";
 import { moverRatings, playerRatings } from "./ratings.mjs";
 import { supported } from "./detect.mjs";
-import { GRADES, gradedTactic, gradeMove, refineGrade, streak, toCentipawns } from "./gamify.mjs";
+import { GRADES, gameAccuracy, gradedTactic, gradeMove, refineGrade, streak, toCentipawns } from "./gamify.mjs";
 import { bookMove, repertoireMove, trapAfter, trapAhead } from "./book.mjs";
 const api = chrome.storage.local;
 const root = document.getElementById("companion-content");
@@ -335,6 +335,109 @@ async function injectReaders(tabId) {
     return false;
   }
 }
+// Each followed tab's game as moves from its start position. The page's move
+// list gives the whole game; otherwise moves are chained from one observed
+// position to the next. The engine needs the moves, not just the position, to
+// see repetitions (a third repetition is a draw).
+const gameLogs = new Map();
+const positionOf = (fen) => fen.split(" ").slice(0, 4).join(" ");
+function replayGame(start, moves, count = moves.length) {
+  const game = new Chess(start);
+  for (const move of moves.slice(0, count)) game.move(move);
+  return game;
+}
+function trackGame(source, observation) {
+  let log = gameLogs.get(source);
+  if (Array.isArray(observation.history) && observation.start) {
+    try {
+      const game = replayGame(observation.start, observation.history);
+      if (positionOf(game.fen()) === positionOf(observation.fen)) {
+        const moves = game.history({ verbose: true }).map((move) => move.lan);
+        const sameGame = log && log.start === observation.start &&
+          moves.length >= log.moves.length && log.moves.every((move, index) => moves[index] === move);
+        log = sameGame ? { ...log, moves, fen: game.fen() } : { start: observation.start, moves, fen: game.fen(), id: crypto.randomUUID() };
+        gameLogs.set(source, log);
+        return log;
+      }
+    } catch { /* fall back to chaining positions */ }
+  }
+  const last = observation.last;
+  if (log && positionOf(log.fen) === positionOf(observation.fen)) return log;
+  if (log && last?.before && positionOf(log.fen) === positionOf(last.before)) {
+    log = { ...log, moves: [...log.moves, last.lan || last.from + last.to + (last.promotion || "")], fen: observation.fen };
+  } else if (log && log.moves.length) {
+    // A takeback or a jump to an earlier move: cut the log there.
+    const game = new Chess(log.start);
+    const index = [game.fen(), ...log.moves.map((move) => (game.move(move), game.fen()))]
+      .findIndex((fen) => positionOf(fen) === positionOf(observation.fen));
+    log = index >= 0 ? { ...log, moves: log.moves.slice(0, index), fen: observation.fen }
+      : { start: observation.fen, moves: [], fen: observation.fen, id: crypto.randomUUID() };
+  } else {
+    log = { start: observation.fen, moves: [], fen: observation.fen, id: crypto.randomUUID() };
+  }
+  gameLogs.set(source, log);
+  return log;
+}
+// The game on the board with its moves, or a plain position when the log
+// does not reach it.
+function gameBoard(log, fen) {
+  try {
+    const game = replayGame(log.start, log.moves);
+    if (positionOf(game.fen()) === positionOf(fen)) return game;
+  } catch { /* stale log */ }
+  return new Chess(fen);
+}
+// How the game ended, from the rules (with the moves, so repetitions count)
+// or from the result the site shows.
+function gameEnd(game, observation) {
+  const turn = game.turn();
+  if (game.isCheckmate()) return { score: turn === "w" ? "0-1" : "1-0", reason: "checkmate" };
+  if (game.isStalemate()) return { score: "1/2-1/2", reason: "stalemate" };
+  if (game.isInsufficientMaterial()) return { score: "1/2-1/2", reason: "insufficient material" };
+  if (game.isThreefoldRepetition()) return { score: "1/2-1/2", reason: "repetition" };
+  if (game.isDrawByFiftyMoves()) return { score: "1/2-1/2", reason: "50-move rule" };
+  const result = observation.result;
+  if (!result || observation.analysis) return null;
+  const score = result.score || (result.draw ? "1/2-1/2" : "");
+  if (!score && !result.won) return null;
+  return { score, reason: result.reason || "", won: result.won || "" };
+}
+// A finished game is saved once for Game review (newest first, at most 20).
+const savedReviews = new Map();
+async function saveReview(view, log, end) {
+  const key = log.id + "|" + log.moves.length;
+  if (savedReviews.has(key)) return savedReviews.get(key);
+  const id = log.id;
+  const pending = (async () => {
+    const game = replayGame(log.start, log.moves);
+    const standard = positionOf(log.start) === positionOf(new Chess().fen());
+    const names = view.names || {};
+    const score = end.score || (end.won && view.playerColor
+      ? ((end.won === "won") === (view.playerColor === "w") ? "1-0" : "0-1") : "*");
+    game.setHeader("Event", "Chess Studio game");
+    game.setHeader("Site", view.site === "LICHESS" ? "lichess.org" : "chess.com");
+    game.setHeader("Date", new Date().toISOString().slice(0, 10).replaceAll("-", "."));
+    game.setHeader("White", names.w || "White");
+    game.setHeader("Black", names.b || "Black");
+    game.setHeader("Result", score);
+    if (end.reason) game.setHeader("Termination", end.reason);
+    const record = {
+      id, pgn: game.pgn(), start: standard ? undefined : log.start,
+      white: names.w || "", black: names.b || "", result: score, reason: end.reason || "",
+      playerColor: view.playerColor || (view.flipped ? "b" : "w"), site: view.site || "", date: new Date().toISOString(),
+    };
+    const { reviews = [] } = await api.get("reviews");
+    await api.set({ reviews: [record, ...reviews.filter((item) => item.id !== id)].slice(0, 20) });
+    return id;
+  })();
+  savedReviews.set(key, pending);
+  pending.catch(() => savedReviews.delete(key));
+  return pending;
+}
+function openReview(id) {
+  const url = chrome.runtime.getURL("game-review.html") + "?id=" + encodeURIComponent(id);
+  chrome.tabs.create({ url }).catch(() => window.open(url, "_blank"));
+}
 async function followWebsite() {
   lastTick = Date.now();
   const version = revision;
@@ -420,7 +523,12 @@ async function followWebsite() {
       positionKey = key;
       controller?.abort();
       controller = new AbortController();
-      const board = new Chess(observation.fen);
+      const log = trackGame(id, observation);
+      const game = gameBoard(log, observation.fen);
+      const end = gameEnd(game, observation);
+      // Suggestions and premoves see the moves (and so repetitions) in every
+      // game: analysis boards, games against a computer and live games.
+      const board = game;
       if (opening && params.has("player")) {
         const color = params.get("player");
         if (["you", "opponent", "w", "b"].includes(color)) selectedPlayers.set(id, color);
@@ -445,6 +553,9 @@ async function followWebsite() {
         chosenColor: websiteOptions.bullet ? null : selectedColor || null,
         fen: observation.fen,
         last: observation.last,
+        game,
+        gameOver: end,
+        openReview: end ? async () => openReview(await saveReview(view, log, end)) : null,
         mode: "website",
         bullet: websiteOptions.bullet,
         site: observation.site,
@@ -469,7 +580,7 @@ async function followWebsite() {
         coachVisible: websiteOptions.coach === "always",
         candidates: [],
         human:
-          !websiteOptions.maia && (!websiteOptions.bullet || controls.lens === "human") && websiteOptions.enabled && !board.isGameOver()
+          !websiteOptions.maia && (!websiteOptions.bullet || controls.lens === "human") && websiteOptions.enabled && !end && !board.isGameOver()
             ? humanLines(
                 observation.fen,
                 moverElo,
@@ -481,7 +592,7 @@ async function followWebsite() {
         pending:
           websiteOptions.enabled &&
           !reactionsOnly &&
-          !board.isGameOver(),
+          !end && !board.isGameOver(),
       };
       if (opening) {
         opening = false;
@@ -548,6 +659,7 @@ async function followWebsite() {
         };
       }
       attachGrades(view);
+      if (end) saveReview(view, log, end).catch(() => {});
       renderedSite = view;
       draw(view);
       if (controls.lens === "pro" && !view.replyFocus) {
@@ -663,6 +775,8 @@ function attachGrades(view) {
   view.grade = store.latest?.grade || null;
   view.gradeMove = store.latest?.move || null;
   view.streak = streak(store.log);
+  // Accuracy over all your graded moves of this game.
+  view.accuracy = store.log.length ? gameAccuracy(store.log) : null;
   view.gradeCelebrate = Boolean(store.latest?.celebrate);
   // Graded moves of this game in board order, for the commentary feed.
   view.gradeHistory = store.history.filter((entry) => entry.ply <= plyOf(view.fen));
@@ -683,17 +797,26 @@ async function gradeMoveOf(view) {
     store.history = [];
   }
   const depth = Math.min(websiteOptions.depth, GRADE_DEPTH);
+  // With the game's moves, a move that repeats the position a third time is
+  // graded as the draw it is, not as the winning move it would otherwise be.
+  const played = view.game?.history().length && positionOf(view.game.fen()) === positionOf(last.after) ? view.game : null;
+  let beforeGame = new Chess(last.before), afterGame = new Chess(last.after);
+  if (played) {
+    const moves = played.history({ verbose: true }).map((move) => move.lan);
+    const start = played.history({ verbose: true })[0].before;
+    afterGame = replayGame(start, moves);
+    beforeGame = replayGame(start, moves, moves.length - 1);
+  }
   // Two lines before the move: the second tells a "Great" (only) move apart.
   const [[best, second], [reply]] = await Promise.all([
-    analyze(new Chess(last.before), { depth, count: 2 }),
-    analyze(new Chess(last.after), { depth, count: 1 }),
+    analyze(beforeGame, { depth, count: 2 }),
+    analyze(afterGame, { depth, count: 1 }),
   ]);
   if (!best?.pv?.length) return;
   const bestMove = best.pv[0];
   const wasBest = bestMove.slice(0, 4) === last.from + last.to &&
     (bestMove[4] || "") === (last.promotion || "");
   // The reply is scored from the opponent’s perspective. Handle terminal positions directly.
-  const afterGame = new Chess(last.after);
   const afterCp = afterGame.isCheckmate() ? 10000 : afterGame.isGameOver() ? 0 : -toCentipawns(reply);
   const beforeCp = toCentipawns(best);
   let grade = gradedTactic(gradeMove(beforeCp, afterCp, wasBest), last, reply, beforeCp, afterCp, wasBest);
@@ -722,8 +845,10 @@ async function gradeMoveOf(view) {
   }
   if (book) grade = { ...GRADES.book, key: "book", loss: grade.loss, opening: book.name };
   const live = renderedSite?.source === view.source ? renderedSite : null;
-  const playerColor = live?.playerColor ?? view.playerColor;
-  const mine = !playerColor || last.color === playerColor;
+  // Your side: known from the page, else the side at the bottom of the board.
+  // (Treating every move as yours made the coach talk about the opponent's moves.)
+  const playerColor = live?.playerColor ?? view.playerColor ?? ((live || view).flipped ? "b" : "w");
+  const mine = last.color === playerColor;
   const move = { san: last.san, color: last.color, before: last.before, after: last.after, from: last.from, to: last.to };
   const entry = {
     grade, move, mine, ply: plyOf(last.after), celebrate: mine && grade.tone === "best",
@@ -736,7 +861,8 @@ async function gradeMoveOf(view) {
   if (ahead && ahead.victim === playerColor) entry.trapAhead = { name: ahead.name, bait: ahead.bait };
   // Opening talk: name a new opening once; say when the game leaves the book.
   const earlier = store.history.filter((item) => item.ply < entry.ply);
-  if (book) entry.openingIntro = !earlier.some((item) => item.grade.opening === book.name);
+  // The opening is named on your own move, once.
+  if (book) entry.openingIntro = mine && !earlier.some((item) => item.mine && item.openingIntro && item.grade.opening === book.name);
   else if (lastBook && entry.ply - lastBook.ply === 1 && mine) entry.leftBook = true;
   store.history = [...store.history.filter((item) => item.ply < entry.ply), entry]
     .sort((a, b) => a.ply - b.ply).slice(-12);

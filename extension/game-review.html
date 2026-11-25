@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Game review · Chess Studio</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="game-review.css" />
+    <script type="module" src="game-review.mjs"></script>
+  </head>
+  <body class="gr">
+    <header class="gr-brand">
+      <img src="pieces/bN.svg" alt="" width="24" height="24" />
+      <span>Chess Studio</span>
+      <span class="gr-brand-sep" aria-hidden="true">/</span>
+      <span class="gr-brand-page">Game review</span>
+    </header>
+    <main class="gr-main" id="main" hidden>
+      <section class="gr-board-col" aria-label="Board">
+        <div class="gr-player" id="player-top"></div>
+        <div class="gr-board-wrap">
+          <div class="gr-evalbar" id="evalbar" role="img" aria-label="Evaluation">
+            <div class="gr-evalbar-fill" id="evalbar-fill"></div>
+            <span class="gr-evalbar-label" id="evalbar-label"></span>
+          </div>
+          <div class="board gr-board" id="board" role="group" aria-label="Chess board"></div>
+        </div>
+        <div class="gr-player" id="player-bottom"></div>
+        <nav class="gr-controls" aria-label="Move controls">
+          <button type="button" id="first" aria-label="First position" title="First (Home)">⏮</button>
+          <button type="button" id="prev" aria-label="Previous move" title="Previous (←)">‹</button>
+          <span class="gr-step" id="step" role="status" aria-live="polite"></span>
+          <button type="button" id="next" aria-label="Next move" title="Next (→)">›</button>
+          <button type="button" id="last" aria-label="Last position" title="Last (End)">⏭</button>
+          <button type="button" id="flip" aria-label="Flip board" title="Flip board">⇅</button>
+        </nav>
+      </section>
+      <aside class="gr-side">
+        <header class="gr-head">
+          <h1 id="title"></h1>
+          <p class="gr-result" id="result"></p>
+          <p class="gr-meta" id="meta"></p>
+        </header>
+        <div class="gr-progress" id="progress" role="status" aria-live="polite">
+          <div class="gr-progress-track"><div class="gr-progress-bar" id="progress-bar"></div></div>
+          <span id="progress-text">Getting ready…</span>
+        </div>
+        <section class="gr-card gr-summary" id="summary" aria-label="Summary"></section>
+        <section class="gr-card gr-graph-card" aria-label="Evaluation graph">
+          <div class="gr-graph" id="graph"></div>
+        </section>
+        <section class="gr-card gr-coach" id="coach" aria-label="Coach" aria-live="polite"></section>
+        <section class="gr-card gr-moves-card" aria-label="Moves">
+          <div class="gr-moves" id="moves" role="list"></div>
+        </section>
+      </aside>
+    </main>
+    <p class="gr-error" id="error" role="alert" hidden></p>
+  </body>
+</html>

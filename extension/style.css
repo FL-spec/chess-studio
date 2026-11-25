@@ -2471,3 +2471,20 @@ button.cm-plan-link {
 }
 button.cm-plan-link:hover { text-decoration: underline; }
 button.cm-plan-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 3px; }
+
+/* ---------- v1.15.0: end of game ---------- */
+.game-over {
+  display: grid; grid-template-columns: 64px 1fr; gap: 6px 12px; align-items: center;
+  margin: 4px 0 12px; padding: 14px; border-radius: 16px;
+  background: var(--paper); border: 1px solid var(--rule);
+}
+.game-over-face img { display: block; width: 64px; height: 64px; border-radius: 50%; background: var(--rail); }
+.game-over-body { min-width: 0; }
+.game-over-result { margin: 0; font-size: 18px; font-weight: 750; letter-spacing: -.01em; color: var(--ink); }
+.game-over[data-outcome="won"] .game-over-result { color: var(--best, #1f9d55); }
+.game-over[data-outcome="lost"] .game-over-result { color: var(--bad, #c43d3d); }
+.game-over-line { margin: 2px 0 0; font-size: 13px; line-height: 1.4; color: var(--ink); }
+.game-over-stat { margin: 2px 0 0; font-size: 12px; }
+.game-over-open { grid-column: 1 / -1; width: 100%; min-height: 40px; margin-top: 6px; font-weight: 650; }
+.commentary[data-ended] .cm-stage, .commentary[data-ended] .cm-status { display: none; }
+body[data-game-over] #open { display: none; }

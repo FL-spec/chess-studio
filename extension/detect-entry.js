@@ -141,6 +141,32 @@
         : "wc-chess-board, chess-board, #board-single, .chessboard",
     );
   }
+  // The result the site shows when a game ends ("1-0", "0-1", "½-½") and,
+  // when it says so, why (checkmate, resignation, time…). Best effort: the
+  // panel also finds checkmate, stalemate and draws from the moves themselves.
+  function readResult(lichess) {
+    const nodes = document.querySelectorAll(lichess
+      ? ".result-wrap .result, .result-wrap .status, .analyse__moves .result"
+      : ".game-result, .game-over-header-component, .game-over-modal-content .header-title-component, [data-cy='game-over-modal-content'] .header-title-component");
+    const text = [...nodes].map((node) => node.textContent.replace(/\s+/g, " ").trim()).join(" ");
+    if (!text) return undefined;
+    const token = text.match(/\b(1-0|0-1|1\/2-1\/2)\b|½-½/);
+    const score = token ? (token[0] === "½-½" ? "1/2-1/2" : token[0]) : "";
+    const words = text.toLowerCase();
+    const reason =
+      /checkmate/.test(words) ? "checkmate" :
+      /resign/.test(words) ? "resignation" :
+      /time|timeout|flag/.test(words) ? "time" :
+      /abandon/.test(words) ? "abandonment" :
+      /stalemate/.test(words) ? "stalemate" :
+      /repetition/.test(words) ? "repetition" :
+      /agree/.test(words) ? "agreement" :
+      /insufficient/.test(words) ? "insufficient material" :
+      /50|fifty/.test(words) ? "50-move rule" : "";
+    const won = /\byou won\b/.test(words) ? "won" : /\byou lost\b/.test(words) ? "lost" : "";
+    if (!score && !reason && !won && !/\bdraw\b|\bwins?\b|game over|game aborted/.test(words)) return undefined;
+    return { score, reason, won, draw: score === "1/2-1/2" || /\bdraw/.test(words) };
+  }
   let previous, stamp, cached, route;
   function capture() {
     if (!supported(location.href)) {
@@ -193,14 +219,15 @@
           text,
         ),
       );
-    const key = JSON.stringify([location.pathname, pieces, fen, moves, flipped, players]);
+    const result = readResult(lichess);
+    const key = JSON.stringify([location.pathname, pieces, fen, moves, flipped, players, result]);
     if (stamp === key && cached) return cached;
     stamp = key;
     const position = reconstruct(pieces, { fen, moves, previous, startFen });
     if (!position) return (cached = { status: "position" });
     previous = position;
     return (cached = {
-      status: "ready", site, flipped, ...players, ...position,
+      status: "ready", site, flipped, ...players, ...position, result,
       analysis: /(?:^|\/)analysis(?:\/|$)/i.test(location.pathname),
       automaticArrows: automaticArrows(location.href),
     });
@@ -316,6 +343,7 @@
         position.flipped,
         position.playerColor,
         position.names,
+        position.result,
       ]);
       if (next === signature) return;
       signature = next;

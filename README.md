@@ -20,9 +20,10 @@ Chess Studio follows the board you are playing or analysing, shows the strongest
 - **Human lens.** Maia-3, a neural model from the University of Toronto's CSSLab, predicts the moves players at a chosen rating are most likely to make. On 240 positions from Lichess games it ranked the played move first 53.8% of the time ([details](docs/product.md#model-selection-and-verification--150)).
 - **Board arrows.** Turn-aware arrows on supported Chess.com and Lichess pages. Blue arrows show the first move, amber arrows show the expected reply.
 - **You and your opponent.** On Chess.com, the signed-in username labels the players. Pick a player to keep their moves in the list as turns change.
-- **Move grades and reactions.** Each move you play gets a grade from Best to Blunder, with a streak and accuracy. Switch the panel from **Coach** to **Commentator** to hide suggestions and get a comment on every move instead.
+- **Move grades and reactions.** Each move you play gets a grade from Best to Blunder, with a streak and accuracy. Switch the panel from **Coach** to **Commentator** to hide suggestions and get short comments on your moves instead. The opponent's moves get a comment only when they are very bad or very good.
 - **Three views.** A pop-out window, a panel pinned in Chrome's side panel, and Studio, a full workspace with replay controls.
 - **Practice.** Play as White or Black against a local opponent, with or without hints.
+- **Game review.** When a game ends, the panel shows the result and an **Open in Studio** button. It opens a clean review of the whole game: accuracy, grade counts, an evaluation graph, the move list with grade icons, and the coach explaining each move.
 - **Review.** Load a PGN or FEN, compare the played move with Stockfish's best line, find turning points, and replay a position with hints hidden.
 - **Library.** Save positions and games locally and export them as PGN.
 
