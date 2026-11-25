@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.10.1 · 2026-11-25
+
+### Changed
+
+- **Less repetition.** The coach's speech bubble no longer repeats the move and grade (such as "Book · Scandinavian Defence"). The grade badge above the board already shows them.
+
 ## 1.10.0 · 2026-11-25
 
 ### Added

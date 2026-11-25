@@ -265,7 +265,6 @@ function coachReaction(view) {
   if (state.say !== say) {
     state.say = say;
     const parts = [];
-    if (line) parts.push(describe(line.label, "coach-react-label", "span"));
     if (sound) {
       state.sound = line?.text || (lastPly < 0 ? "…" : coachSound(coachId, lastPly, state.sound));
       const text = describe(state.sound, "coach-react-idle");
