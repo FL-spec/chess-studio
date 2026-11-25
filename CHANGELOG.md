@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## 1.12.1 · 2026-11-25
+
+### Changed
+
+- **No lone info icon.** The row above the moves shows only when it has something to say: a progress message, reply text or the level picker. In Engine mode, the row with only the (i) icon is gone.
+
 ## 1.12.0 · 2026-11-25
 
 ### Added
